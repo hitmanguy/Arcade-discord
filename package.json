@@ -1,0 +1,31 @@
+{
+  "name": "arcade_dis",
+  "version": "1.0.0",
+  "description": "a discord arcade bot",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "node test",
+    "clean-windows": "if exist dist rd /s /q dist",
+    "clean-linux": "rm -rf dist",
+    "compile": "npm run clean-windows && tsc",
+    "start": "node dist/index.js",
+    "watch": "tsc -w",
+    "cs": "npm run compile && npm run start"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/hitmanguy/Arcade-discord.git"
+  },
+  "author": "hitmanguy",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/hitmanguy/Arcade-discord/issues"
+  },
+  "homepage": "https://github.com/hitmanguy/Arcade-discord#readme",
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "discord.js": "^14.18.0"
+  }
+}
