@@ -20,7 +20,7 @@ export * from './types/Config';
 export * from './types/ExtendedClientOptions';
 export * from './types/Features';
 export * from './types/Formatting';
-export * from './types/intent';
+export * from './types/Intent';
 export * from './types/Paginator';
 export * from './types/RegisterType';
 export * from './types/TerminalColor';

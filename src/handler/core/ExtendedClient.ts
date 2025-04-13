@@ -6,7 +6,7 @@ import { EventManager } from '../events/EventManager';
 import type { RegisterType } from '../types/RegisterType';
 import { CommandManager } from '../commands/CommandManager';
 import { ComponentManager } from '../components/ComponentManager';
-import { AutomaticIntents, EventIntentMapping } from '../types/intent';
+import { AutomaticIntents, EventIntentMapping } from '../types/Intent';
 import type { ExtendedClientOptions } from '../types/ExtendedClientOptions';
 import { Client, type GatewayIntentBits, IntentsBitField } from 'discord.js';
 import { type ComponentCollections, emptyComponentCollections } from '../types/ComponentCollections';

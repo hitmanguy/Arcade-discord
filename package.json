@@ -4,13 +4,11 @@
   "description": "a discord arcade bot",
   "main": "src/index.ts",
   "scripts": {
-    "test": "node test",
-    "clean-windows": "if exist dist rd /s /q dist",
-    "clean-linux": "rm -rf dist",
-    "compile": "npm run clean-windows && tsc",
-    "start": "node dist/index.js",
-    "watch": "tsc -w",
-    "cs": "npm run compile && npm run start"
+    "start": "bun run src/index.ts",
+    "start:node": "ts-node src/index.ts --incremental",
+    "start:build": "node dist/index.js",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "build": "tsc"
   },
   "repository": {
     "type": "git",
@@ -23,10 +21,15 @@
   },
   "homepage": "https://github.com/hitmanguy/Arcade-discord#readme",
   "devDependencies": {
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "@types/bun": "latest",
+    "@types/node": "^22.13.1",
+    "prettier": "^3.5.0",
+    "ts-node": "^10.9.2"
   },
   "dependencies": {
     "discord.js": "^14.18.0",
+    "dotenv": "^16.5.0",
     "mongoose": "^8.13.2"
   }
 }
