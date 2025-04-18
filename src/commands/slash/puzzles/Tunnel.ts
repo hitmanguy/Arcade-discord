@@ -42,6 +42,7 @@ export default new SlashCommand({
       ephemeral: true,
     });
 
+    /*
     // Create modal ahead of time
     const modal = new ModalBuilder()
       .setCustomId('tunnelrace_modal')
@@ -56,6 +57,21 @@ export default new SlashCommand({
             .setRequired(true)
         )
       );
+    */
+      const modal: ModalBuilder = new ModalBuilder()
+      .setCustomId('tunnelrace_modal')
+      .setTitle('Tunnel Sequence');
+
+    const colorInput: TextInputBuilder = new TextInputBuilder()
+      .setCustomId('sequence_input')
+      .setLabel("Enter the sequence")
+      .setPlaceholder('E.g., Left Right Forward')
+      .setStyle(TextInputStyle.Short);
+
+    
+    modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(colorInput)
+    );
 
     // Wait 1.5 seconds, then show the modal
     setTimeout(async () => {
