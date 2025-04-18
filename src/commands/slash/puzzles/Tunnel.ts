@@ -42,6 +42,16 @@ export default new SlashCommand({
       ephemeral: true,
     });
 
+    setTimeout(async () => {
+        try {
+          await shown.edit({ content: '⏳ Time\'s up! Enter the sequence below 👇' });
+          await interaction.showModal(modal);
+        } catch (err) {
+          console.error('❌ Error during sequence hide/show modal:', err);
+        }
+      }, 1500);
+
+    /*
     // Create modal ahead of time
     const modal = new ModalBuilder()
       .setCustomId('tunnelrace_modal')
@@ -56,6 +66,21 @@ export default new SlashCommand({
             .setRequired(true)
         )
       );
+    */
+      const modal: ModalBuilder = new ModalBuilder()
+      .setCustomId('tunnelrace_modal')
+      .setTitle('Tunnel Sequence');
+
+    const colorInput: TextInputBuilder = new TextInputBuilder()
+      .setCustomId('sequence_input')
+      .setLabel("Enter the sequence")
+      .setPlaceholder('E.g., Left Right Forward')
+      .setStyle(TextInputStyle.Short);
+
+    
+    modal.addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(colorInput)
+    );
 
     // Wait 1.5 seconds, then show the modal
     setTimeout(async () => {
