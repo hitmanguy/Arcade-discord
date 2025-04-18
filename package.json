@@ -21,13 +21,14 @@
   },
   "homepage": "https://github.com/hitmanguy/Arcade-discord#readme",
   "devDependencies": {
-    "typescript": "^5.8.2",
     "@types/bun": "latest",
     "@types/node": "^22.13.1",
     "prettier": "^3.5.0",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
   },
   "dependencies": {
+    "bun": "^1.2.10",
     "discord.js": "^14.18.0",
     "dotenv": "^16.5.0",
     "mongoose": "^8.13.2"
