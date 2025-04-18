@@ -42,6 +42,15 @@ export default new SlashCommand({
       ephemeral: true,
     });
 
+    setTimeout(async () => {
+        try {
+          await shown.edit({ content: '⏳ Time\'s up! Enter the sequence below 👇' });
+          await interaction.showModal(modal);
+        } catch (err) {
+          console.error('❌ Error during sequence hide/show modal:', err);
+        }
+      }, 1500);
+
     /*
     // Create modal ahead of time
     const modal = new ModalBuilder()
