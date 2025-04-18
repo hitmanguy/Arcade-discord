@@ -11,7 +11,7 @@ import {
 
 // Define Level 1 puzzles
 const level1Puzzles = [
-  // Riddle
+  // Ridd
   {
     type: 'riddle',
     question: 'What has hands but can’t clap?',
