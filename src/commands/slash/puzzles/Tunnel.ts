@@ -2,11 +2,14 @@ import { RegisterType, SlashCommand } from '../../../handler';
 import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
-  ActionRowBuilder,
-  TextInputBuilder,
-  ModalBuilder,
-  TextInputStyle,
   MessageFlags,
+  ComponentType,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from 'discord.js';
 
 function generateTunnelSequence(length = 4) {
@@ -28,14 +31,18 @@ export default new SlashCommand({
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const sequence = generateTunnelSequence();
     const sequenceStr = sequence.join(' → ');
+    const correctAnswer = sequence.map(s => s.toLowerCase()).join(' ');
 
-    // Step 1: Show the sequence briefly
-    await interaction.reply({
+    // Defer reply first to avoid interaction errors
+    await interaction.deferReply({ ephemeral: true });
+
+    // Send the sequence to memorize
+    const shown = await interaction.followUp({
       content: `🚨 Memorize this tunnel sequence:\n\n**${sequenceStr}**`,
       ephemeral: true,
     });
 
-    // Step 2: Build the modal ahead of time
+    // Create modal ahead of time
     const modal = new ModalBuilder()
       .setCustomId('tunnelrace_modal')
       .setTitle('Tunnel Sequence')
@@ -45,25 +52,23 @@ export default new SlashCommand({
             .setCustomId('sequence_input')
             .setLabel('Enter the sequence')
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder('E.g., Left Right Forward Backward')
+            .setPlaceholder('E.g., Left Right Forward')
             .setRequired(true)
         )
       );
 
-    // Step 3: Wait 1.5s and show the modal
+    // Wait 1.5 seconds, then show the modal
     setTimeout(async () => {
       try {
         await interaction.showModal(modal);
       } catch (err) {
-        console.error('Error showing modal:', err);
+        console.error('❌ Error showing modal:', err);
       }
     }, 1500);
 
-    // Step 4: Wait for response
+    // Wait for modal input
     const submission = await interaction.awaitModalSubmit({
-      filter: (i) =>
-        i.customId === 'tunnelrace_modal' &&
-        i.user.id === interaction.user.id,
+      filter: (i) => i.customId === 'tunnelrace_modal' && i.user.id === interaction.user.id,
       time: 15000,
     }).catch(() => null);
 
@@ -72,30 +77,28 @@ export default new SlashCommand({
         content: `⏱️ You hesitated too long!\n🔻 -5 Sanity | ⚠️ +2 Suspicion`,
         ephemeral: true,
       });
-      // 🛠️ TODO: Add stat update here
       return;
     }
 
-    // Step 5: Process answer
-    const answer = submission.fields.getTextInputValue('sequence_input')
-      .trim()
-      .toLowerCase()
-      .replace(/ +/g, ' ');
-
-    const correctAnswer = sequence.map((s) => s.toLowerCase()).join(' ');
+    const answer = submission.fields.getTextInputValue('sequence_input').trim().toLowerCase().replace(/ +/g, ' ');
 
     if (answer === correctAnswer) {
       await submission.reply({
         content: `✅ You dashed perfectly through the tunnel!\n🎉 +10 Merit | 🧠 +5 Sanity`,
         ephemeral: true,
       });
-      // 🛠️ TODO: Add stat update here (e.g., +10 merit, +5 sanity)
+
+      // 🔧 Place to add stat update: increase Merit, Sanity
+      // await updateStats(userId, { merit: +10, sanity: +5 });
+
     } else {
       await submission.reply({
         content: `❌ Wrong turn! The correct sequence was **${sequenceStr}**.\n🔻 -5 Sanity | ⚠️ +2 Suspicion`,
         ephemeral: true,
       });
-      // 🛠️ TODO: Add stat update here (e.g., -5 sanity, +2 suspicion)
+
+      // 🔧 Place to add stat update: decrease Sanity, increase Suspicion
+      // await updateStats(userId, { sanity: -5, suspicion: +2 });
     }
   },
 });
