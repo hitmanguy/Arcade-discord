@@ -9,7 +9,7 @@ import {
   ComponentType,
 } from 'discord.js';
 
-// Define Level 1 puzzl
+// Define Level 1 puz
 const level1Puzzles = [
   // Ri
   {
