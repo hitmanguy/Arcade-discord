@@ -39,10 +39,11 @@ function shuffleDeck(deck: string[]): string[] {
   return deck;
 }
 
-function canPlay(colour: string, value: string, playerHand: string[]): boolean {
-  return playerHand.some(card =>
-    card.includes('Wild') || card.includes(colour) || card.includes(value)
-  );
+function canPlay(topCard: string, card: string): boolean {
+  if (card.includes('Wild')) return true;
+  const [topColour, ...topVal] = topCard.split(' ');
+  const topValue = topVal.join(' ');
+  return card.includes(topColour) || card.includes(topValue);
 }
 
 export default new SlashCommand({
@@ -50,57 +51,91 @@ export default new SlashCommand({
 
   data: new SlashCommandBuilder()
     .setName('uno')
-    .setDescription('Draw a hand and try to play a card against the top discard!'),
+    .setDescription('Play a quick 4-card UNO match!'),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
     let deck = shuffleDeck(shuffleDeck(buildDeck()));
-    const hand = deck.splice(0, 7);
-    const discard = deck.shift()!;
 
-    const [currentColour, ...rest] = discard.split(' ');
-    const currentValue = rest.join(' ') || 'Any';
+    const hand = deck.splice(0, 4);
+    const discardPile: string[] = [deck.shift()!];
+    let topCard = discardPile[discardPile.length - 1];
 
-    const playable = hand.filter(card => canPlay(currentColour, currentValue, [card]));
+    let playerHand = [...hand];
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      (playable.length ? playable : ['Draw Card']).map((card) =>
-        new ButtonBuilder()
-          .setCustomId(`uno:play:${card}`)
-          .setLabel(card)
-          .setStyle(ButtonStyle.Primary)
-      )
-    );
+    const playTurn = async () => {
+      const playable = playerHand.filter(card => canPlay(topCard, card));
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        (playable.length ? playable : ['Draw Card']).map((card) =>
+          new ButtonBuilder()
+            .setCustomId(`uno:play:${card}`)
+            .setLabel(card)
+            .setStyle(ButtonStyle.Primary)
+        )
+      );
+
+      await interaction.editReply({
+        content: `🎮 **UNO**
+Top Card: **${topCard}**
+Your Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}`,
+        components: [row],
+      });
+
+      const collector = interaction.channel?.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 20000,
+        max: 1,
+      });
+
+      collector?.on('collect', async (btnInteraction) => {
+        if (btnInteraction.user.id !== interaction.user.id) {
+          return btnInteraction.reply({ content: 'This is not your game!', ephemeral: true });
+        }
+
+        const chosen = btnInteraction.customId.split(':')[2];
+        if (chosen === 'Draw Card') {
+          const newCard = deck.shift()!;
+          playerHand.push(newCard);
+          await btnInteraction.update({
+            content: `🃏 You drew \`${newCard}\`.`,
+            components: [],
+          });
+          setTimeout(playTurn, 2000);
+          return;
+        }
+
+        if (!canPlay(topCard, chosen)) {
+          await btnInteraction.update({
+            content: `❌ \`${chosen}\` can't be played on \`${topCard}\`.`,
+            components: [],
+          });
+          setTimeout(playTurn, 2000);
+          return;
+        }
+
+        playerHand = playerHand.filter(c => c !== chosen);
+        discardPile.push(chosen);
+        topCard = chosen;
+
+        await btnInteraction.update({
+          content: `✅ You played \`${chosen}\`.`,
+          components: [],
+        });
+
+        if (playerHand.length === 0) {
+          await interaction.followUp({ content: `🎉 You played all 4 cards! You win!`, ephemeral: true });
+        } else {
+          setTimeout(playTurn, 2000);
+        }
+      });
+    };
 
     await interaction.reply({
-      content: `🎮 **UNO TIME**
-Top Discard: **${discard}**
-Your Hand: ${hand.map(c => `\`${c}\``).join(', ')}`,
-      components: [row],
+      content: `🎮 **UNO** - Quick 4 Card Game!`,
+      components: [],
       flags: [MessageFlags.Ephemeral],
     });
 
-    const collector = interaction.channel?.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: 15000,
-      max: 1,
-    });
-
-    collector?.on('collect', async (btnInteraction) => {
-      if (btnInteraction.user.id !== interaction.user.id) {
-        return btnInteraction.reply({ content: 'This is not your UNO turn!', ephemeral: true });
-      }
-
-      const chosen = btnInteraction.customId.split(':')[2];
-      const isDraw = chosen === 'Draw Card';
-      const isCorrect = playable.includes(chosen);
-
-      await btnInteraction.update({
-        content: isDraw
-          ? `🃏 You drew a card. Better luck next turn!`
-          : `✅ You played **${chosen}** against **${discard}**!
-🎯 ${isCorrect ? 'Nice move!' : 'Oops, not playable...'}`,
-        components: [],
-      });
-    });
+    setTimeout(playTurn, 1000);
   },
 });
