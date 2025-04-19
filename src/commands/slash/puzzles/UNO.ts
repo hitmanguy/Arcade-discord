@@ -81,13 +81,25 @@ export default new SlashCommand({
     let topCard = discardPile[0];
     let currentColor = topCard.split(' ')[0];
     let isPlayerTurn = true;
+    let gameEnded = false;
+
+    const stopButtonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('uno:stop')
+        .setLabel('🛑 Stop Game')
+        .setStyle(ButtonStyle.Danger)
+    );
 
     const playTurn = async () => {
+      if (gameEnded) return;
+
       if (playerHand.length === 0) {
+        gameEnded = true;
         await interaction.followUp({ content: '🎉 You win! You played all your cards!', ephemeral: true });
         return;
       }
       if (botHand.length === 0) {
+        gameEnded = true;
         await interaction.followUp({ content: '😢 Bot wins! Better luck next time.', ephemeral: true });
         return;
       }
@@ -107,16 +119,20 @@ export default new SlashCommand({
 
         await interaction.editReply({
           content: `🎮 **UNO**\nTop Card: **${topCard}**\nYour Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}\nBot Hand: ${'🂠'.repeat(botHand.length)}`,
-          components: [row],
+          components: [row, stopButtonRow],
         });
 
         const collector = interaction.channel?.createMessageComponentCollector({
           componentType: ComponentType.Button,
           time: 30000,
-          max: 1,
         });
 
         collector?.on('collect', async (btnInteraction) => {
+          if (btnInteraction.customId === 'uno:stop') {
+            gameEnded = true;
+            return btnInteraction.update({ content: '🛑 Game stopped. Bot wins by default!', components: [] });
+          }
+
           if (btnInteraction.user.id !== interaction.user.id) {
             return btnInteraction.reply({ content: 'This is not your game!', ephemeral: true });
           }
@@ -147,7 +163,7 @@ export default new SlashCommand({
               new StringSelectMenuBuilder()
                 .setCustomId(selectId)
                 .setPlaceholder('Choose a color')
-                .addOptions(colours.map(color => new StringSelectMenuOptionBuilder().setLabel(color).setValue(color)))
+                .addOptions(playerHand.map(card => card.split(' ')[0]).filter((v, i, a) => colours.includes(v) && a.indexOf(v) === i).map(color => new StringSelectMenuOptionBuilder().setLabel(color).setValue(color)))
             );
 
             await btnInteraction.update({ content: '🎨 Choose a color:', components: [colorSelect] });
@@ -226,7 +242,7 @@ export default new SlashCommand({
 
         await interaction.editReply({
           content: `🎮 **UNO**\nTop Card: **${topCard}**\nYour Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}\nBot Hand: ${'🂠'.repeat(botHand.length)}\n${botPlayMessage}`,
-          components: [],
+          components: [stopButtonRow],
         });
 
         setTimeout(playTurn, 2000);
@@ -235,7 +251,7 @@ export default new SlashCommand({
 
     await interaction.reply({
       content: `🎮 **UNO** - You vs Bot!`,
-      components: [],
+      components: [stopButtonRow],
       flags: [MessageFlags.Ephemeral],
     });
 
