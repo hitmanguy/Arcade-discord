@@ -96,7 +96,7 @@ export default new SlashCommand({
         );
 
         await interaction.editReply({
-          content: `🎮 **UNO**\nTop Card: **${topCard}**\nYour Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}\nBot has ${botHand.length} cards.`,
+          content: `🎮 **UNO**\nTop Card: **${topCard}**\nYour Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}\nBot Hand: ${'🂠'.repeat(botHand.length)}`,
           components: [row],
         });
 
@@ -131,9 +131,10 @@ export default new SlashCommand({
           topCard = chosen;
 
           if (chosen.includes('Wild') || chosen.includes('Draw Four')) {
+            const selectId = `uno:choosecolor:${Date.now()}`;
             const colorSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
               new StringSelectMenuBuilder()
-                .setCustomId('uno:choosecolor')
+                .setCustomId(selectId)
                 .setPlaceholder('Choose a color')
                 .addOptions(colours.map(color => new StringSelectMenuOptionBuilder().setLabel(color).setValue(color)))
             );
@@ -143,6 +144,7 @@ export default new SlashCommand({
               componentType: ComponentType.StringSelect,
               time: 15000,
               max: 1,
+              filter: int => int.customId === selectId
             });
             colorCollector?.on('collect', async (selectInt) => {
               if (selectInt.user.id !== interaction.user.id) return;
@@ -203,7 +205,7 @@ export default new SlashCommand({
         }
 
         await interaction.editReply({
-          content: `🎮 **UNO**\nTop Card: **${topCard}**\nYour Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}\nBot has ${botHand.length} cards.\n${botPlayMessage}`,
+          content: `🎮 **UNO**\nTop Card: **${topCard}**\nYour Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}\nBot Hand: ${'🂠'.repeat(botHand.length)}\n${botPlayMessage}`,
           components: [],
         });
 
