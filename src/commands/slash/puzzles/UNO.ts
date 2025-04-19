@@ -1,132 +1,106 @@
-// unoCardGame.ts
+import { RegisterType, SlashCommand } from '../../../handler';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChatInputCommandInteraction,
+  SlashCommandBuilder,
+  MessageFlags,
+  ComponentType,
+} from 'discord.js';
+
+const colours = ['Red', 'Green', 'Yellow', 'Blue'];
+const values = [
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  'Draw Two', 'Skip', 'Reverse',
+];
+const wilds = ['Wild', 'Wild Draw Four'];
 
 function buildDeck(): string[] {
   const deck: string[] = [];
-  const colours = ["Red", "Green", "Yellow", "Blue"];
-  const values = [
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-    "Draw Two", "Skip", "Reverse"
-  ];
-  const wilds = ["Wild", "Wild Draw Four"];
-
   for (const colour of colours) {
     for (const value of values) {
       const cardVal = `${colour} ${value}`;
       deck.push(cardVal);
-      if (value !== "0") deck.push(cardVal);
+      if (value !== '0') deck.push(cardVal);
     }
   }
-
   for (let i = 0; i < 4; i++) {
-    deck.push(wilds[0]);
-    deck.push(wilds[1]);
+    deck.push(...wilds);
   }
-
   return deck;
 }
 
 function shuffleDeck(deck: string[]): string[] {
-  for (let i = 0; i < deck.length; i++) {
-    const randPos = Math.floor(Math.random() * deck.length);
-    [deck[i], deck[randPos]] = [deck[randPos], deck[i]];
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   return deck;
 }
 
-function drawCards(deck: string[], numCards: number): string[] {
-  return deck.splice(0, numCards);
-}
-
-function showHand(player: number, playerHand: string[]): void {
-  console.log(`Player ${player + 1}'s Turn`);
-  console.log("Your Hand");
-  console.log("------------------");
-  playerHand.forEach((card, index) => {
-    console.log(`${index + 1}) ${card}`);
-  });
-  console.log("");
-}
-
 function canPlay(colour: string, value: string, playerHand: string[]): boolean {
-  return playerHand.some(card => card.includes("Wild") || card.includes(colour) || card.includes(value));
+  return playerHand.some(card =>
+    card.includes('Wild') || card.includes(colour) || card.includes(value)
+  );
 }
 
-// Main Game Logic
-let unoDeck = shuffleDeck(shuffleDeck(buildDeck()));
-const discards: string[] = [];
-const players: string[][] = [];
-const colours = ["Red", "Green", "Yellow", "Blue"];
+export default new SlashCommand({
+  registerType: RegisterType.Guild,
 
-let numPlayers = parseInt(prompt("How many players? (2-4)") || "0");
-while (numPlayers < 2 || numPlayers > 4) {
-  numPlayers = parseInt(prompt("Invalid. Please enter a number between 2-4.") || "0");
-}
+  data: new SlashCommandBuilder()
+    .setName('uno')
+    .setDescription('Draw a hand and try to play a card against the top discard!'),
 
-for (let i = 0; i < numPlayers; i++) {
-  players.push(drawCards(unoDeck, 5));
-}
+  async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    let deck = shuffleDeck(shuffleDeck(buildDeck()));
+    const hand = deck.splice(0, 7);
+    const discard = deck.shift()!;
 
-let playerTurn = 0;
-let playDirection = 1;
-let playing = true;
-let winner = "";
+    const [currentColour, ...rest] = discard.split(' ');
+    const currentValue = rest.join(' ') || 'Any';
 
-// Set first card
-discards.push(unoDeck.shift()!);
-let [currentColour, ...rest] = discards[0].split(" ");
-let cardVal = currentColour === "Wild" ? "Any" : rest.join(" ");
+    const playable = hand.filter(card => canPlay(currentColour, currentValue, [card]));
 
-while (playing) {
-  const hand = players[playerTurn];
-  showHand(playerTurn, hand);
-  console.log(`Card on top of discard pile: ${discards[discards.length - 1]}`);
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      (playable.length ? playable : ['Draw Card']).map((card) =>
+        new ButtonBuilder()
+          .setCustomId(`uno:play:${card}`)
+          .setLabel(card)
+          .setStyle(ButtonStyle.Primary)
+      )
+    );
 
-  if (canPlay(currentColour, cardVal, hand)) {
-    let cardChosen = parseInt(prompt("Which card do you want to play?") || "0");
-    while (!canPlay(currentColour, cardVal, [hand[cardChosen - 1]])) {
-      cardChosen = parseInt(prompt("Not a valid card. Which card do you want to play?") || "0");
-    }
+    await interaction.reply({
+      content: `🎮 **UNO TIME**
+Top Discard: **${discard}**
+Your Hand: ${hand.map(c => `\`${c}\``).join(', ')}`,
+      components: [row],
+      flags: [MessageFlags.Ephemeral],
+    });
 
-    const playedCard = hand.splice(cardChosen - 1, 1)[0];
-    console.log(`You played ${playedCard}`);
-    discards.push(playedCard);
+    const collector = interaction.channel?.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      time: 15000,
+      max: 1,
+    });
 
-    if (hand.length === 0) {
-      playing = false;
-      winner = `Player ${playerTurn + 1}`;
-      break;
-    }
-
-    [currentColour, ...rest] = playedCard.split(" ");
-    cardVal = currentColour === "Wild" ? "Any" : rest.join(" ");
-
-    if (currentColour === "Wild") {
-      colours.forEach((c, idx) => console.log(`${idx + 1}) ${c}`));
-      let newColour = parseInt(prompt("What colour would you like to choose?") || "0");
-      while (newColour < 1 || newColour > 4) {
-        newColour = parseInt(prompt("Invalid option. What colour would you like to choose?") || "0");
+    collector?.on('collect', async (btnInteraction) => {
+      if (btnInteraction.user.id !== interaction.user.id) {
+        return btnInteraction.reply({ content: 'This is not your UNO turn!', ephemeral: true });
       }
-      currentColour = colours[newColour - 1];
-    }
 
-    if (cardVal === "Reverse") {
-      playDirection *= -1;
-    } else if (cardVal === "Skip") {
-      playerTurn = (playerTurn + playDirection + numPlayers) % numPlayers;
-    } else if (cardVal === "Draw Two") {
-      const playerDraw = (playerTurn + playDirection + numPlayers) % numPlayers;
-      players[playerDraw].push(...drawCards(unoDeck, 2));
-    } else if (cardVal === "Draw Four") {
-      const playerDraw = (playerTurn + playDirection + numPlayers) % numPlayers;
-      players[playerDraw].push(...drawCards(unoDeck, 4));
-    }
-  } else {
-    console.log("You can't play. You have to draw a card.");
-    players[playerTurn].push(...drawCards(unoDeck, 1));
-  }
+      const chosen = btnInteraction.customId.split(':')[2];
+      const isDraw = chosen === 'Draw Card';
+      const isCorrect = playable.includes(chosen);
 
-  playerTurn = (playerTurn + playDirection + numPlayers) % numPlayers;
-}
-
-console.log("Game Over");
-console.log(`${winner} is the Winner!`);
+      await btnInteraction.update({
+        content: isDraw
+          ? `🃏 You drew a card. Better luck next turn!`
+          : `✅ You played **${chosen}** against **${discard}**!
+🎯 ${isCorrect ? 'Nice move!' : 'Oops, not playable...'}`,
+        components: [],
+      });
+    });
+  },
+});
