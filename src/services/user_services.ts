@@ -11,14 +11,14 @@ export class UserService {
       // Find existing user or create new one
       let userData = await User.findOne({ discordId });
       
-      if (!userData && member) {
-        userData = new User({
-          discordId,
-          username: member.user.username,
-          joinedAt: new Date()
-        });
-        await userData.save();
-      }
+      // if (!userData && member) {
+      //   userData = new User({
+      //     discordId,
+      //     username: member.user.username,
+      //     joinedAt: new Date()
+      //   });
+      //   await userData.save();
+      // }
       
       return userData;
     } catch (error) {

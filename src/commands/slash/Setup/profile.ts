@@ -49,7 +49,7 @@ export default new SlashCommand({
     ) as SlashCommandBuilder,
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    // Load or create user data
+
     const targetUser = interaction.options.getUser('user') || interaction.user;
     const member = interaction.guild?.members.cache.get(targetUser.id);
     const subcommand = interaction.options.getSubcommand();
@@ -60,7 +60,7 @@ export default new SlashCommand({
     let userData = await UserService.getUserData(targetUser.id, member);
     
     if (!userData) {
-      await interaction.editReply({ content: '❌ Failed to load user data' });
+      await interaction.editReply({ content: `❌ Seems like you have'nt yet registered to the Game, please type /register to continue.` });
       return;
     }
     
@@ -81,7 +81,6 @@ export default new SlashCommand({
 });
 
 async function showProfile(interaction: ChatInputCommandInteraction, userData: UserDocument, member?: GuildMember | null) {
-  // Create loading animation
   const loadingEmbed = new EmbedBuilder()
     .setColor(PRISON_COLORS.primary as ColorResolvable)
     .setTitle('🔄 Accessing Infinite Prison Database...')
@@ -89,7 +88,6 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
   
   await interaction.editReply({ embeds: [loadingEmbed] });
   
-  // Simulate loading with typing indicators
   for (let i = 0; i < 3; i++) {
     await sleep(800);
     await interaction.editReply({
@@ -99,7 +97,6 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
     });
   }
   
-  // Create main profile embed
   const profileEmbed = new EmbedBuilder()
     .setColor(PRISON_COLORS.accent as ColorResolvable)
     .setTitle(`🔒 INFINITE PRISON - INMATE #${userData.discordId.slice(-6)}`)
@@ -133,7 +130,6 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
     components: [row]
   });
   
-  // Set up collector for button interactions
   const collector = interaction.channel?.createMessageComponentCollector({
     componentType: ComponentType.Button,
     filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('profile:'),
@@ -261,7 +257,6 @@ async function showCustomizationMenu(interaction: ChatInputCommandInteraction, u
     components: [customizeRow]
   });
   
-  // Set up collector for button interactions
   const collector = interaction.channel?.createMessageComponentCollector({
     componentType: ComponentType.Button,
     filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('customize:'),
@@ -273,7 +268,6 @@ async function showCustomizationMenu(interaction: ChatInputCommandInteraction, u
     
     switch (action) {
       case 'username':
-        // This would be implemented with a modal in a full version
         await i.update({
           content: 'Username change functionality is coming soon...',
           embeds: [],
@@ -322,7 +316,6 @@ async function showCustomizationMenu(interaction: ChatInputCommandInteraction, u
 }
 
 async function showDetailedStats(interaction: ChatInputCommandInteraction, userData: UserDocument) {
-  // Simulate data loading with animation
   const loadingEmbed = new EmbedBuilder()
     .setColor(PRISON_COLORS.primary as ColorResolvable)
     .setTitle('🔄 Retrieving Behavioral Records...')
@@ -331,7 +324,6 @@ async function showDetailedStats(interaction: ChatInputCommandInteraction, userD
   await interaction.editReply({ embeds: [loadingEmbed] });
   await sleep(1500);
   
-  // Create fancy progress bars
   const sanityBar = createProgressBar(userData.sanity, 100);
   const suspicionBar = createProgressBar(userData.suspiciousLevel, 100);
   
@@ -367,7 +359,6 @@ async function showDetailedStats(interaction: ChatInputCommandInteraction, userD
     components: [actionsRow]
   });
   
-  // Set up collector for button interactions
   const collector = interaction.channel?.createMessageComponentCollector({
     componentType: ComponentType.Button,
     filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('stats:'),

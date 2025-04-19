@@ -10,9 +10,9 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
-  Message,
-  MessageFlags
 } from 'discord.js';
+import { UserService } from '../../../services/user_services';
+import { User, UserDocument } from 'src/model/user_status';
 
 // Enhanced direction set with better visuals
 const DIRECTIONS = [
@@ -70,7 +70,15 @@ export default new SlashCommand({
     const difficulty = interaction.options.getInteger('difficulty') || 1;
     const sequence = generateRaceSequence(difficulty);
     const flashTime = Math.max(1500 - (difficulty * 200), 600); // Faster flashing at higher difficulties
-    
+    const targetUser = interaction.options.getUser('user') || interaction.user;
+
+    await interaction.deferReply({ ephemeral: true });
+
+    const UserData = await UserService.getUserData(targetUser.id);
+    if(!UserData){
+      await interaction.editReply({ content: `❌ Seems like you have'nt yet registered to the Game, please type /register to continue.` });
+      return;
+    }
     // Correct answer is just the directions in sequence
     const correctAnswer = sequence.map(s => s.direction.name.toLowerCase()).join(' ');
 
@@ -180,11 +188,11 @@ export default new SlashCommand({
         secondCollector?.on('collect', async (hintBtnInteraction) => {
           secondCollector.stop();
           await showModal(hintBtnInteraction, difficulty);
-          await handleModalSubmission(hintBtnInteraction, correctAnswer, sequence, difficulty);
+          await handleModalSubmission(hintBtnInteraction, correctAnswer, sequence, difficulty,UserData);
         });
       } else {
         await showModal(btnInteraction, difficulty);
-        await handleModalSubmission(btnInteraction, correctAnswer, sequence, difficulty);
+        await handleModalSubmission(btnInteraction, correctAnswer, sequence, difficulty,UserData);
       }
     });
 
@@ -222,7 +230,7 @@ async function showModal(btnInteraction: any, difficulty: number) {
   await btnInteraction.showModal(modal);
 }
 
-async function handleModalSubmission(btnInteraction: any, correctAnswer: string, sequence: any[], difficulty: number) {
+async function handleModalSubmission(btnInteraction: any, correctAnswer: string, sequence: any[], difficulty: number,UserData: UserDocument) {
   const submission = await btnInteraction.awaitModalSubmit({
     filter: (i: any) => i.customId === 'tunnel_modal' && i.user.id === btnInteraction.user.id,
     time: 20000,
@@ -257,7 +265,6 @@ async function handleModalSubmission(btnInteraction: any, correctAnswer: string,
   const bonusPoints = Math.round(baseReward * difficulty * matchRatio);
   
   if (matchRatio >= 0.8) {
-    // Success - player did well
     const successEmbed = new EmbedBuilder()
       .setColor('#00ff99')
       .setTitle(matchRatio === 1 ? '🏆 PERFECT ESCAPE!' : '✅ Successful Escape!')
@@ -275,6 +282,10 @@ async function handleModalSubmission(btnInteraction: any, correctAnswer: string,
       embeds: [successEmbed],
       ephemeral: true
     });
+    
+    UserData.meritPoints += bonusPoints;
+    UserData.sanity += Math.round(5 * difficulty * matchRatio);
+    await UserData.save();
   } else {
     // Failure - player made too many mistakes
     const injuryLevel = 5 - Math.floor(matchRatio * 5);
@@ -294,6 +305,9 @@ async function handleModalSubmission(btnInteraction: any, correctAnswer: string,
       embeds: [failureEmbed],
       ephemeral: true
     });
+    UserData.suspiciousLevel += 2;
+    UserData.sanity -= 5;
+    await UserData.save();
   }
 }
 
