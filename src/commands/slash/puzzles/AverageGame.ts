@@ -481,11 +481,42 @@ async function startNewRound(client: any, gameState: GameState, gameCode: string
               .setStyle(ButtonStyle.Secondary)
           );
         }
+
         
         await user.send({
           content: `🎮 **Round ${gameState.round} - Choose a number**\nPick a range first, then you'll select a specific number.`,
           components: [row]
         });
+        // Create collector for this user
+        const dmChannel = await user.createDM();
+
+        const collector = dmChannel.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        filter: (i: { user: { id: string; }; customId: string; }) => i.user.id === player.id && i.customId.startsWith(`borderland:number:${gameCode}`),
+        time: 60000
+        });
+
+        collector.on('collect', async (i: ButtonInteraction) => {
+        const range = i.customId.split(':')[3]; // e.g., "1-10", "11-20", etc.
+
+        await i.update({
+            content: `You selected range **${range}**. Now pick a number from that range.`,
+            components: [] // optionally remove buttons
+        });
+
+        // TODO: Send new buttons for numbers in that range
+        // Maybe trigger another collector here to choose the actual number
+
+        collector.stop(); // if you don't want multiple ranges selected
+        });
+
+        collector.on('end', (collected: Collection<Snowflake, ButtonInteraction>) => {
+        if (collected.size === 0) {
+            user.send("⏰ You didn't pick a number in time. You've been marked as inactive.");
+            player.active = false;
+        }
+        });
+
       } catch (error) {
         console.error(`Failed to send DM to player ${player.id}:`, error);
         // Mark player as inactive if we can't DM them
