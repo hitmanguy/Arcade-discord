@@ -1,0 +1,40 @@
+{
+  "name": "unogame-js",
+  "version": "1.0.0",
+  "description": "A simple UNO game engine written in JavaScript",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js *.integration.test.js",
+    "jsdoc": "jsdoc -c jsdoc.json"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./utils": "./src/utils/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/raihankr/uno-game-engine.git"
+  },
+  "author": "Raihan Khairul Rochman",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/raihankr/uno-game-engine/issues"
+  },
+  "homepage": "https://github.com/raihankr/uno-game-engine#readme",
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "eslint": "^8.57.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.29.1",
+    "jest": "^29.7.0",
+    "jsdoc": "~4.0.2",
+    "jsdoc-export-default-interop": "^0.3.1",
+    "taffydb": "^2.7.3",
+    "tui-jsdoc-template": "^1.2.2"
+  },
+  "dependencies": {
+    "titleize": "^4.0.0"
+  }
+}
