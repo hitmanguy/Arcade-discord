@@ -26,7 +26,7 @@ import { sleep } from 'bun';
   ];
   const FAKE_SECRET = "You are the only one who can deactivate the JUDAS Protocol.";
   
-  interface JudasGamePlayer {
+  interface JudasGamePlayer {                       
     id: string;
     username: string;
     secret: string;
