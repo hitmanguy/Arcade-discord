@@ -48,6 +48,15 @@ function canPlay(topCard: string, card: string): boolean {
   return card.includes(topColour) || card.includes(topValue);
 }
 
+function getValidStartingCard(deck: string[]): string {
+  let card = deck.shift()!;
+  while (card.includes('Wild') || card.includes('Skip') || card.includes('Reverse')) {
+    deck.push(card);
+    card = deck.shift()!;
+  }
+  return card;
+}
+
 export default new SlashCommand({
   registerType: RegisterType.Guild,
 
@@ -60,10 +69,9 @@ export default new SlashCommand({
 
     const playerHand = deck.splice(0, 4);
     const botHand = deck.splice(0, 4);
-    const discardPile: string[] = [deck.shift()!];
+    const discardPile: string[] = [getValidStartingCard(deck)];
     let topCard = discardPile[0];
-    let currentColor = topCard.includes('Wild') ? '' : topCard.split(' ')[0];
-
+    let currentColor = topCard.split(' ')[0];
     let isPlayerTurn = true;
 
     const playTurn = async () => {
@@ -184,6 +192,7 @@ Bot has ${botHand.length} cards.`,
           discardPile.push(chosen);
           topCard = chosen;
           currentColor = chosen.includes('Wild') ? colours[Math.floor(Math.random() * 4)] : chosen.split(' ')[0];
+
           if (chosen.includes('Draw Four')) playerHand.push(...deck.splice(0, 4));
           if (chosen.includes('Draw Two')) playerHand.push(...deck.splice(0, 2));
           if (chosen.includes('Skip') || chosen.includes('Reverse')) {
@@ -193,6 +202,7 @@ Bot has ${botHand.length} cards.`,
               playTurn();
             }, 2000);
           }
+
           await interaction.followUp({ content: `🤖 Bot played \`${chosen}\`.`, ephemeral: true });
           isPlayerTurn = true;
           setTimeout(playTurn, 2000);
