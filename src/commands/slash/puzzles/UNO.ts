@@ -7,6 +7,8 @@ import {
   SlashCommandBuilder,
   MessageFlags,
   ComponentType,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
 } from 'discord.js';
 
 const colours = ['Red', 'Green', 'Yellow', 'Blue'];
@@ -51,87 +53,155 @@ export default new SlashCommand({
 
   data: new SlashCommandBuilder()
     .setName('uno')
-    .setDescription('Play a quick 4-card UNO match!'),
+    .setDescription('Play a quick 4-card UNO match vs bot!'),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    let deck = shuffleDeck(shuffleDeck(buildDeck()));
+    let deck = shuffleDeck(buildDeck());
 
-    const hand = deck.splice(0, 4);
+    const playerHand = deck.splice(0, 4);
+    const botHand = deck.splice(0, 4);
     const discardPile: string[] = [deck.shift()!];
-    let topCard = discardPile[discardPile.length - 1];
+    let topCard = discardPile[0];
+    let currentColor = topCard.includes('Wild') ? '' : topCard.split(' ')[0];
 
-    let playerHand = [...hand];
+    let isPlayerTurn = true;
 
     const playTurn = async () => {
-      const playable = playerHand.filter(card => canPlay(topCard, card));
+      if (playerHand.length === 0) {
+        await interaction.followUp({ content: '🎉 You win! You played all your cards!', ephemeral: true });
+        return;
+      }
+      if (botHand.length === 0) {
+        await interaction.followUp({ content: '😢 Bot wins! Better luck next time.', ephemeral: true });
+        return;
+      }
 
-      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        (playable.length ? playable : ['Draw Card']).map((card) =>
-          new ButtonBuilder()
-            .setCustomId(`uno:play:${card}`)
-            .setLabel(card)
-            .setStyle(ButtonStyle.Primary)
-        )
-      );
+      if (isPlayerTurn) {
+        const playable = playerHand.filter(c => canPlay(topCard, c));
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          (playable.length ? playable : ['Draw Card']).map(card =>
+            new ButtonBuilder()
+              .setCustomId(`uno:play:${card}`)
+              .setLabel(card)
+              .setStyle(ButtonStyle.Primary)
+          )
+        );
 
-      await interaction.editReply({
-        content: `🎮 **UNO**
+        await interaction.editReply({
+          content: `🎮 **UNO**
 Top Card: **${topCard}**
-Your Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}`,
-        components: [row],
-      });
-
-      const collector = interaction.channel?.createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        time: 20000,
-        max: 1,
-      });
-
-      collector?.on('collect', async (btnInteraction) => {
-        if (btnInteraction.user.id !== interaction.user.id) {
-          return btnInteraction.reply({ content: 'This is not your game!', ephemeral: true });
-        }
-
-        const chosen = btnInteraction.customId.split(':')[2];
-        if (chosen === 'Draw Card') {
-          const newCard = deck.shift()!;
-          playerHand.push(newCard);
-          await btnInteraction.update({
-            content: `🃏 You drew \`${newCard}\`.`,
-            components: [],
-          });
-          setTimeout(playTurn, 2000);
-          return;
-        }
-
-        if (!canPlay(topCard, chosen)) {
-          await btnInteraction.update({
-            content: `❌ \`${chosen}\` can't be played on \`${topCard}\`.`,
-            components: [],
-          });
-          setTimeout(playTurn, 2000);
-          return;
-        }
-
-        playerHand = playerHand.filter(c => c !== chosen);
-        discardPile.push(chosen);
-        topCard = chosen;
-
-        await btnInteraction.update({
-          content: `✅ You played \`${chosen}\`.`,
-          components: [],
+Your Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}
+Bot has ${botHand.length} cards.`,
+          components: [row],
         });
 
-        if (playerHand.length === 0) {
-          await interaction.followUp({ content: `🎉 You played all 4 cards! You win!`, ephemeral: true });
+        const collector = interaction.channel?.createMessageComponentCollector({
+          componentType: ComponentType.Button,
+          time: 30000,
+          max: 1,
+        });
+
+        collector?.on('collect', async (btnInteraction) => {
+          if (btnInteraction.user.id !== interaction.user.id) {
+            return btnInteraction.reply({ content: 'This is not your game!', ephemeral: true });
+          }
+
+          const chosen = btnInteraction.customId.split(':')[2];
+
+          if (chosen === 'Draw Card') {
+            const newCard = deck.shift()!;
+            playerHand.push(newCard);
+            await btnInteraction.update({ content: `🃏 You drew \`${newCard}\`.`, components: [] });
+            isPlayerTurn = false;
+            return setTimeout(playTurn, 2000);
+          }
+
+          if (!canPlay(topCard, chosen)) {
+            await btnInteraction.update({ content: `❌ \`${chosen}\` can't be played.`, components: [] });
+            return setTimeout(playTurn, 2000);
+          }
+
+          playerHand.splice(playerHand.indexOf(chosen), 1);
+          discardPile.push(chosen);
+          topCard = chosen;
+
+          if (chosen.includes('Wild')) {
+            const colorSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('uno:choosecolor')
+                .setPlaceholder('Choose a color')
+                .addOptions(colours.map(color => new StringSelectMenuOptionBuilder().setLabel(color).setValue(color)))
+            );
+
+            await btnInteraction.update({ content: '🎨 Choose a color:', components: [colorSelect] });
+            const colorCollector = interaction.channel?.createMessageComponentCollector({
+              componentType: ComponentType.StringSelect,
+              time: 15000,
+              max: 1,
+            });
+            colorCollector?.on('collect', async (selectInt) => {
+              if (selectInt.user.id !== interaction.user.id) return;
+              currentColor = selectInt.values[0];
+              if (chosen.includes('Draw Four')) {
+                botHand.push(...deck.splice(0, 4));
+              }
+              await selectInt.update({ content: `You chose **${currentColor}**`, components: [] });
+              isPlayerTurn = false;
+              setTimeout(playTurn, 2000);
+            });
+            return;
+          }
+
+          currentColor = chosen.split(' ')[0];
+
+          if (chosen.includes('Draw Two')) {
+            botHand.push(...deck.splice(0, 2));
+          }
+
+          if (chosen.includes('Skip') || chosen.includes('Reverse')) {
+            await btnInteraction.update({ content: `You played \`${chosen}\`. Bot's turn skipped!`, components: [] });
+            return setTimeout(() => {
+              isPlayerTurn = true;
+              playTurn();
+            }, 2000);
+          }
+
+          await btnInteraction.update({ content: `✅ You played \`${chosen}\`.`, components: [] });
+          isPlayerTurn = false;
+          setTimeout(playTurn, 2000);
+        });
+      } else {
+        const playable = botHand.filter(c => canPlay(topCard, c));
+        let chosen: string;
+        if (playable.length === 0) {
+          const drawn = deck.shift()!;
+          botHand.push(drawn);
+          isPlayerTurn = true;
+          return setTimeout(playTurn, 1000);
         } else {
+          chosen = playable[Math.floor(Math.random() * playable.length)];
+          botHand.splice(botHand.indexOf(chosen), 1);
+          discardPile.push(chosen);
+          topCard = chosen;
+          currentColor = chosen.includes('Wild') ? colours[Math.floor(Math.random() * 4)] : chosen.split(' ')[0];
+          if (chosen.includes('Draw Four')) playerHand.push(...deck.splice(0, 4));
+          if (chosen.includes('Draw Two')) playerHand.push(...deck.splice(0, 2));
+          if (chosen.includes('Skip') || chosen.includes('Reverse')) {
+            await interaction.followUp({ content: `🤖 Bot played \`${chosen}\`. Your turn skipped!`, ephemeral: true });
+            return setTimeout(() => {
+              isPlayerTurn = false;
+              playTurn();
+            }, 2000);
+          }
+          await interaction.followUp({ content: `🤖 Bot played \`${chosen}\`.`, ephemeral: true });
+          isPlayerTurn = true;
           setTimeout(playTurn, 2000);
         }
-      });
+      }
     };
 
     await interaction.reply({
-      content: `🎮 **UNO** - Quick 4 Card Game!`,
+      content: `🎮 **UNO** - You vs Bot!`,
       components: [],
       flags: [MessageFlags.Ephemeral],
     });
