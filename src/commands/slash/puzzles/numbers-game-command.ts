@@ -5,7 +5,8 @@ import {
   EmbedBuilder,
   Message,
   MessageCollector,
-  TextChannel
+  TextChannel,
+  Client
 } from 'discord.js';
 import { createGame, joinGame, startGame, getActiveGames } from '../../../functions/numbers-game-lobby';
 import { GameState } from '../../../functions/numbers-game-state';

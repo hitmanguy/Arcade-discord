@@ -1,12 +1,12 @@
+
 import { 
   TextChannel, 
   EmbedBuilder, 
   MessageCollector,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ComponentType,
-  ButtonInteraction
+  User,
+  DMChannel,
+  Client,
+  Message
 } from 'discord.js';
 import { GameState, Player, TeamUp } from './numbers-game-state';
 
@@ -15,6 +15,7 @@ export async function runBetrayalRound(channel: TextChannel, gameState: GameStat
   gameState.resetRound();
   
   const alivePlayers = gameState.getAlivePlayers();
+  const client = channel.client;
   
   // Start the round
   const roundEmbed = new EmbedBuilder()
@@ -22,8 +23,8 @@ export async function runBetrayalRound(channel: TextChannel, gameState: GameStat
     .setDescription(`Three players remain. You can play solo or team up!`)
     .addFields(
       { name: 'Players', value: alivePlayers.map(p => `<@${p.id}> (${p.lives} ❤️)`).join('\n') },
-      { name: 'Option A: Play Solo', value: `Type: **choose 42** (replace with your number 1-100)` },
-      { name: 'Option B: Team Up', value: `Type: **team @player** to propose a team-up` }
+      { name: 'Option A: Play Solo', value: `Check your DMs to submit your number (1-100)` },
+      { name: 'Option B: Team Up', value: `Check your DMs to propose a team-up` }
     )
     .setColor(0xcc00ff)
     .setFooter({ text: 'You have 45 seconds for this phase' });
@@ -31,119 +32,50 @@ export async function runBetrayalRound(channel: TextChannel, gameState: GameStat
   await channel.send({ embeds: [roundEmbed] });
   
   // Phase 1: Team formation (20 seconds)
-  await teamFormationPhase(channel, gameState);
+  await teamFormationPhase(channel, client, gameState);
   
   // Phase 2: Number submission (25 seconds)
-  await numberSubmissionPhase(channel, gameState);
+  await numberSubmissionPhase(channel, client, gameState);
   
   // Process results
   await processResults(channel, gameState);
 }
 
-async function teamFormationPhase(channel: TextChannel, gameState: GameState): Promise<void> {
+async function teamFormationPhase(channel: TextChannel, client: Client, gameState: GameState): Promise<void> {
   const alivePlayers = gameState.getAlivePlayers();
   
   // Let players know team formation phase started
-  await channel.send('### Team Formation Phase (20 seconds)\nType **team @player** to propose a team-up or wait to play solo.');
+  await channel.send('### Team Formation Phase (20 seconds)\nCheck your DMs to propose or accept team-ups.');
   
-  // Create collector for team formation
-  const teamFilter = (m: any) => {
-    // Check if message is from an alive player
-    const player = alivePlayers.find(p => p.id === m.author.id);
-    if (!player) return false;
-    
-    // Check if message follows the team format
-    const content = m.content.toLowerCase().trim();
-    return content.startsWith('team ') && m.mentions.users.size > 0;
-  };
-  
-  const teamCollector = channel.createMessageCollector({ filter: teamFilter, time: 20000 });
-  
-  teamCollector.on('collect', async message => {
-    const proposerId = message.author.id;
-    const targetId = message.mentions.users.first()?.id;
-    
-    if (!targetId) {
-      await channel.send(`<@${proposerId}> Please mention a valid player.`);
-      return;
+  // Send DMs to all players with instructions
+  const dmPromises = alivePlayers.map(async player => {
+    try {
+      const user = await client.users.fetch(player.id);
+      const teamFormationEmbed = new EmbedBuilder()
+        .setTitle(`🤝 Round ${gameState.currentRound} - Team Formation`)
+        .setDescription('You can play solo or team up with another player.')
+        .addFields(
+          { name: 'Option A: Play Solo', value: 'Do nothing and wait for number submission phase.' },
+          { name: 'Option B: Team Up', value: 'Type **team @player** to propose a team-up (mention their username)' }
+        )
+        .setColor(0xcc00ff)
+        .setFooter({ text: 'You have 20 seconds for team formation' });
+      
+      await user.send({ embeds: [teamFormationEmbed] });
+      
+      // Setup collectors for this user's DMs
+      setupTeamFormationCollectors(user, player, alivePlayers, client, gameState);
+    } catch (error) {
+      console.error(`Could not DM player ${player.id}:`, error);
     }
-    
-    // Check if target is alive
-    const target = alivePlayers.find(p => p.id === targetId);
-    if (!target) {
-      await channel.send(`<@${proposerId}> That player is not in the game or already eliminated.`);
-      return;
-    }
-    
-    // Check if self-targeting
-    if (proposerId === targetId) {
-      await channel.send(`<@${proposerId}> You can't team up with yourself.`);
-      return;
-    }
-    
-    // Create team-up offer
-    const proposer = alivePlayers.find(p => p.id === proposerId)!;
-    proposer.teamUpWith = targetId;
-    target.teamUpOffer = proposerId;
-    
-    // Create team-up entry
-    gameState.createTeamUp(proposerId, targetId);
-    
-    await message.reply(`You proposed a team-up with <@${targetId}>. They need to accept by typing **accept @${message.author.username}**.`);
-    
-    // Also notify the target player
-    await channel.send(`<@${targetId}> You received a team-up offer from <@${proposerId}>. Type **accept @${message.author.username}** to accept or ignore to decline.`);
   });
   
-  // Create collector for team acceptances
-  const acceptFilter = (m: any) => {
-    // Check if message is from an alive player
-    const player = alivePlayers.find(p => p.id === m.author.id);
-    if (!player || !player.teamUpOffer) return false;
-    
-    // Check if message follows the accept format
-    const content = m.content.toLowerCase().trim();
-    return content.startsWith('accept ') && m.mentions.users.size > 0;
-  };
-  
-  const acceptCollector = channel.createMessageCollector({ filter: acceptFilter, time: 20000 });
-  
-  acceptCollector.on('collect', async message => {
-    const accepterId = message.author.id;
-    const proposerId = message.mentions.users.first()?.id;
-    
-    if (!proposerId) {
-      await channel.send(`<@${accepterId}> Please mention a valid player.`);
-      return;
-    }
-    
-    // Check if this is a valid team-up offer
-    const accepter = alivePlayers.find(p => p.id === accepterId)!;
-    if (accepter.teamUpOffer !== proposerId) {
-      await channel.send(`<@${accepterId}> That player didn't send you a team-up offer.`);
-      return;
-    }
-    
-    // Accept the team-up
-    const proposer = alivePlayers.find(p => p.id === proposerId)!;
-    proposer.teamUpWith = accepterId;
-    accepter.teamUpWith = proposerId;
-    
-    // Update team-up status
-    gameState.acceptTeamUp(proposerId, accepterId);
-    
-    await message.reply(`You accepted the team-up with <@${proposerId}>. In the next phase, you'll need to agree on a number.`);
-    await channel.send(`<@${proposerId}> Your team-up with <@${accepterId}> has been accepted!`);
-  });
+  await Promise.all(dmPromises);
   
   // Wait for team formation phase to end
   await new Promise(resolve => setTimeout(resolve, 20000));
   
-  // Stop collectors
-  teamCollector.stop();
-  acceptCollector.stop();
-  
-  // Announce team formation results
+  // Announce team formation results in main channel
   const teams: string[] = [];
   const soloPlayers: string[] = [];
   
@@ -173,107 +105,222 @@ async function teamFormationPhase(channel: TextChannel, gameState: GameState): P
   await channel.send({ embeds: [formationEmbed] });
 }
 
-async function numberSubmissionPhase(channel: TextChannel, gameState: GameState): Promise<void> {
+function setupTeamFormationCollectors(user: User, player: Player, alivePlayers: Player[], client: Client, gameState: GameState): void {
+  // Create collector for team proposals
+  const teamFilter = (m: any) => {
+    const content = m.content.toLowerCase().trim();
+    return content.startsWith('team ');
+  };
+  
+  const teamCollector = user.dmChannel?.createMessageCollector({ filter: teamFilter, time: 20000 });
+  
+  teamCollector?.on('collect', async message => {
+    const proposerId = player.id;
+    const targetUsername = message.content.split(' ')[1];
+    
+    if (!targetUsername) {
+      await user.send(`Please specify a valid player username.`);
+      return;
+    }
+    
+    // Try to find the target player by username
+    const target = alivePlayers.find(p => {
+      const user = client.users.cache.get(p.id);
+      return user && (user.username === targetUsername.replace('@', '') || 
+                     user.tag === targetUsername.replace('@', '') ||
+                     p.id === targetUsername.replace('<@', '').replace('>', ''));
+    });
+    
+    if (!target) {
+      await user.send(`Could not find player with username ${targetUsername}.`);
+      return;
+    }
+    
+    // Check if self-targeting
+    if (proposerId === target.id) {
+      await user.send(`You can't team up with yourself.`);
+      return;
+    }
+    
+    // Create team-up offer
+    player.teamUpWith = target.id;
+    target.teamUpOffer = proposerId;
+    
+    // Create team-up entry
+    gameState.createTeamUp(proposerId, target.id);
+    
+    await user.send(`You proposed a team-up with ${targetUsername}. They need to accept it.`);
+    
+    // Also notify the target player
+    try {
+      const targetUser = await client.users.fetch(target.id);
+      await targetUser.send(`${user.username} has proposed a team-up with you. Type **accept ${user.username}** to accept or ignore to decline.`);
+    } catch (error) {
+      console.error(`Could not DM target player ${target.id}:`, error);
+    }
+  });
+  
+  // Create collector for accepting team-ups
+  const acceptFilter = (m: any) => {
+    const content = m.content.toLowerCase().trim();
+    return content.startsWith('accept ') && player.teamUpOffer !== null;
+  };
+  
+  const acceptCollector = user.dmChannel?.createMessageCollector({ filter: acceptFilter, time: 20000 });
+  
+  acceptCollector?.on('collect', async message => {
+    const accepterId = player.id;
+    const proposerUsername = message.content.split(' ')[1];
+    
+    if (!proposerUsername) {
+      await user.send(`Please specify a valid player username.`);
+      return;
+    }
+    
+    // Try to find the proposer by username
+    const proposer = alivePlayers.find(p => {
+      if (p.id !== player.teamUpOffer) return false;
+      const user = client.users.cache.get(p.id);
+      return user && (user.username === proposerUsername.replace('@', '') || 
+                     user.tag === proposerUsername.replace('@', '') ||
+                     p.id === proposerUsername.replace('<@', '').replace('>', ''));
+    });
+    
+    if (!proposer) {
+      await user.send(`That player didn't send you a team-up offer.`);
+      return;
+    }
+    
+    // Accept the team-up
+    proposer.teamUpWith = accepterId;
+    player.teamUpWith = proposer.id;
+    
+    // Update team-up status
+    gameState.acceptTeamUp(proposer.id, accepterId);
+    
+    await user.send(`You accepted the team-up with ${proposerUsername}. In the next phase, you'll need to agree on a number.`);
+    
+    // Notify the proposer
+    try {
+      const proposerUser = await client.users.fetch(proposer.id);
+      await proposerUser.send(`${user.username} has accepted your team-up!`);
+    } catch (error) {
+      console.error(`Could not DM proposer player ${proposer.id}:`, error);
+    }
+  });
+}
+
+async function numberSubmissionPhase(channel: TextChannel, client: Client, gameState: GameState): Promise<void> {
   const alivePlayers = gameState.getAlivePlayers();
   
   // Let players know number submission phase started
-  await channel.send('### Number Submission Phase (25 seconds)\nType **choose 42** (replace with your number 1-100).');
+  await channel.send('### Number Submission Phase (25 seconds)\nCheck your DMs to submit your number.');
   
-  // For team players, send private messages to suggest numbers
-  for (const player of alivePlayers) {
-    if (player.teamUpWith && player.teamUpWith === alivePlayers.find(p => p.id === player.teamUpWith)?.teamUpWith) {
-      // Both players agreed to team up
-      await channel.send(`<@${player.id}> and <@${player.teamUpWith}> - You should coordinate on a number. Type **suggest 42** to suggest a number to your partner.`);
+  // Send DMs to all players for number submission
+  const dmPromises = alivePlayers.map(async player => {
+    try {
+      const user = await client.users.fetch(player.id);
+      
+      // Check if player is in a team
+      const isInTeam = player.teamUpWith && alivePlayers.find(p => p.id === player.teamUpWith)?.teamUpWith === player.id;
+      const numberSubmissionEmbed = new EmbedBuilder()
+        .setTitle(`🔢 Round ${gameState.currentRound} - Number Submission`)
+        .setDescription(isInTeam 
+          ? `You're teamed up with <@${player.teamUpWith}>. You should coordinate on a number.`
+          : 'Choose a number between 1 and 100.')
+        .addFields(
+          { name: 'Submit Number', value: 'Type **choose 42** (replace with your number 1-100)' }
+        );
+      
+      if (isInTeam) {
+        numberSubmissionEmbed.addFields({
+          name: 'Team Coordination', 
+          value: 'Type **suggest 42** to suggest a number to your teammate.\nWhen submitting numbers, teammates should choose the same number to avoid betrayal.'
+        });
+      }
+      
+      await user.send({ embeds: [numberSubmissionEmbed] });
+      
+      // Setup collectors for number suggestions and submissions
+      setupNumberSubmissionCollectors(user, player, alivePlayers, client, gameState);
+    } catch (error) {
+      console.error(`Could not DM player ${player.id}:`, error);
     }
-  }
+  });
   
-  // Create collector for number suggestions
+  await Promise.all(dmPromises);
+  
+  // Wait for number submission phase to end
+  await new Promise(resolve => setTimeout(resolve, 25000));
+}
+
+function setupNumberSubmissionCollectors(user: User, player: Player, alivePlayers: Player[], client: Client, gameState: GameState): void {
+  // Create collector for number suggestions (for teammates)
   const suggestFilter = (m: any) => {
-    // Check if message is from an alive player with a team
-    const player = alivePlayers.find(p => p.id === m.author.id);
-    if (!player || !player.teamUpWith) return false;
-    
-    // Check if message follows the suggest format
     const content = m.content.toLowerCase().trim();
     return content.startsWith('suggest ') && !isNaN(parseInt(content.substring(8)));
   };
   
-  const suggestCollector = channel.createMessageCollector({ filter: suggestFilter, time: 25000 });
+  const suggestCollector = user.dmChannel?.createMessageCollector({ filter: suggestFilter, time: 25000 });
   
-  suggestCollector.on('collect', async message => {
-    const playerId = message.author.id;
+  suggestCollector?.on('collect', async (message) => {
     const content = message.content.toLowerCase().trim();
     const number = parseInt(content.substring(8));
     
     // Validate number is between 1 and 100
     if (number < 1 || number > 100) {
-      await channel.send(`<@${playerId}> Your number must be between 1 and 100.`);
+      await user.send(`Your number must be between 1 and 100.`);
       return;
     }
     
-    const player = alivePlayers.find(p => p.id === playerId)!;
-    if (!player.teamUpWith) return;
+    if (!player.teamUpWith) {
+      await user.send(`You're not in a team, so you can't suggest numbers.`);
+      return;
+    }
     
     // Find the teammate
     const teammate = alivePlayers.find(p => p.id === player.teamUpWith);
     if (!teammate) return;
     
     // Notify the teammate
-    await channel.send(`<@${teammate.id}> Your partner <@${playerId}> suggests number **${number}** for your team.`);
+    try {
+      const teammateUser = await client.users.fetch(teammate.id);
+      await teammateUser.send(`Your teammate ${user.username} suggests number **${number}** for your team.`);
+    } catch (error) {
+      console.error(`Could not DM teammate ${teammate.id}:`, error);
+    }
     
     // Update team-up number if both agreed
-    const teamUp = gameState.getTeamUp(playerId, teammate.id);
+    const teamUp = gameState.getTeamUp(player.id, teammate.id);
     if (teamUp) {
       teamUp.number = number;
     }
+    
+    await user.send(`You suggested ${number} to your teammate.`);
   });
   
   // Create collector for number submissions
   const chooseFilter = (m: any) => {
-    // Check if message is from an alive player
-    const player = alivePlayers.find(p => p.id === m.author.id);
-    if (!player) return false;
-    
-    // Check if message follows the choose format
     const content = m.content.toLowerCase().trim();
     return content.startsWith('choose ') && !isNaN(parseInt(content.substring(7)));
   };
   
-  const chooseCollector = channel.createMessageCollector({ filter: chooseFilter, time: 25000 });
+  const chooseCollector = user.dmChannel?.createMessageCollector({ filter: chooseFilter, time: 25000 });
   
-  chooseCollector.on('collect', async message => {
-    const playerId = message.author.id;
+  chooseCollector?.on('collect', async message => {
     const content = message.content.toLowerCase().trim();
     const number = parseInt(content.substring(7));
     
     // Validate number is between 1 and 100
     if (number < 1 || number > 100) {
-      await channel.send(`<@${playerId}> Your number must be between 1 and 100.`);
+      await user.send(`Your number must be between 1 and 100.`);
       return;
     }
     
     // Set player's number
-    const player = alivePlayers.find(p => p.id === playerId);
-    if (player) {
-      player.currentNumber = number;
-      await message.reply(`You chose ${number}. Wait for results...`);
-      
-      // If player is in a team, check if this is a betrayal
-      if (player.teamUpWith) {
-        const teammate = alivePlayers.find(p => p.id === player.teamUpWith);
-        if (teammate && teammate.currentNumber !== null && teammate.currentNumber !== number) {
-          // This is a potential betrayal - will be checked in results
-        }
-      }
-    }
+    player.currentNumber = number;
+    await user.send(`You chose ${number}. Wait for results...`);
   });
-  
-  // Wait for number submission phase to end
-  await new Promise(resolve => setTimeout(resolve, 25000));
-  
-  // Stop collectors
-  suggestCollector.stop();
-  chooseCollector.stop();
 }
 
 async function processResults(channel: TextChannel, gameState: GameState): Promise<void> {
@@ -435,82 +482,83 @@ async function processResults(channel: TextChannel, gameState: GameState): Promi
 
 async function chooseLoser(channel: TextChannel, gameState: GameState, winner: Player): Promise<Player> {
   const alivePlayers = gameState.getAlivePlayers().filter(p => p.id !== winner.id);
-
+  
   if (alivePlayers.length === 1) {
     // Only one other player - they automatically lose
     return alivePlayers[0];
   }
-
-  // Create buttons for each possible target
-  const buttons = alivePlayers.map(p =>
-    new ButtonBuilder()
-      .setCustomId(`eliminate_${p.id}`)
-      .setLabel(`${p.id} (${p.lives} ❤️)`)
-      .setStyle(ButtonStyle.Danger)
-  );
-
-  // Discord allows max 5 buttons per row
-  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-  for (let i = 0; i < buttons.length; i += 5) {
-    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(buttons.slice(i, i + 5)));
-  }
-
+  
+  // Create embed to let winner choose
   const chooseEmbed = new EmbedBuilder()
     .setTitle(`🎯 Round ${gameState.currentRound} - Remove a Life`)
-    .setDescription(`<@${winner.id}>, choose a player to lose 1 life:`)
-    .setColor(0xff0000)
-    .setFooter({ text: 'You have 15 seconds to choose' });
-
-  const sentMsg = await channel.send({ embeds: [chooseEmbed], components: rows });
-
-  // Create a button collector
-  return new Promise<Player>(resolve => {
-    const collector = channel.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: 15000,
-      filter: (i: ButtonInteraction) => i.user.id === winner.id
-    });
-
-    let resolved = false;
-
-    collector.on('collect', async (interaction: ButtonInteraction) => {
-      await interaction.deferUpdate(); // Acknowledge immediately
-
-      const targetId = interaction.customId.replace('eliminate_', '');
-      const target = alivePlayers.find(p => p.id === targetId);
-
-      if (!target) {
-        await channel.send(`<@${winner.id}> That player is not in the game or already eliminated.`);
-        return;
-      }
-
-      collector.stop();
-      resolved = true;
-
-      // Disable all buttons after selection
-      const disabledRows = rows.map(row => {
-        row.components.forEach(btn => btn.setDisabled(true));
-        return row;
-      });
-      await sentMsg.edit({ components: disabledRows });
-
-      resolve(target);
-    });
-
-    collector.on('end', async collected => {
-      if (!resolved && alivePlayers.length > 0) {
-        // Time's up - choose random player
-        const randomTarget = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
-
-        // Disable all buttons after timeout
-        const disabledRows = rows.map(row => {
-          row.components.forEach(btn => btn.setDisabled(true));
-          return row;
+    .setDescription(`<@${winner.id}>, check your DMs to choose a player to lose 1 life.`)
+    .setColor(0xff0000);
+  
+  await channel.send({ embeds: [chooseEmbed] });
+  
+  // Send DM to winner
+  try {
+    const user = await channel.client.users.fetch(winner.id);
+    const dmEmbed = new EmbedBuilder()
+      .setTitle(`🎯 Round ${gameState.currentRound} - Remove a Life`)
+      .setDescription(`Choose a player to lose 1 life:`)
+      .addFields(
+        { name: 'Players', value: alivePlayers.map(p => `<@${p.id}> (${p.lives} ❤️)`).join('\n') },
+        { name: 'Instructions', value: `Type:\n**eliminate @username** or **eliminate playerID**` }
+      )
+      .setColor(0xff0000)
+      .setFooter({ text: 'You have 15 seconds to choose' });
+    
+    await user.send({ embeds: [dmEmbed] });
+    
+    // Create collector for winner's choice
+    const filter = (m: any) => {
+      return m.content.toLowerCase().startsWith('eliminate ');
+    };
+    
+    return new Promise(resolve => {
+      const collector = user.dmChannel?.createMessageCollector({ filter, time: 15000 });
+      
+      collector?.on('collect', async (message) => {
+        const targetMention = message.content.split(' ')[1];
+        
+        if (!targetMention) {
+          await user.send(`Please specify a valid player.`);
+          return;
+        }
+        
+        // Try to find the target by username or ID
+        const target = alivePlayers.find(p => {
+          const targetUser = message.guild?.members.cache.get(p.id);
+          return targetUser && (
+            targetUser.nickname === targetMention.replace('@', '') || 
+            targetUser.displayName=== targetMention.replace('@', '') ||
+            p.id === targetMention.replace('<@', '').replace('>', '')
+          );
         });
-        await sentMsg.edit({ components: disabledRows });
-
-        resolve(randomTarget);
-      }
+        
+        if (!target) {
+          await user.send(`Cannot find player "${targetMention}" to eliminate.`);
+          return;
+        }
+        
+        collector.stop();
+        await user.send(`You chose to eliminate <@${target.id}>.`);
+        resolve(target);
+      });
+      
+      collector?.on('end', (collected: { size: number; }) => {
+        if (collected.size === 0) {
+          // Time's up - choose random player
+          const randomTarget = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+          user.send(`Time's up! Randomly selecting <@${randomTarget.id}> to lose a life.`);
+          resolve(randomTarget);
+        }
+      });
     });
-  });
+  } catch (error) {
+    console.error(`Could not DM winner ${winner.id}:`, error);
+    // Fallback: Choose random player
+    return alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+  }
 }
