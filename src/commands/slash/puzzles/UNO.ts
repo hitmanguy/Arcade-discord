@@ -1,69 +1,82 @@
 // UNO.ts
+import { RegisterType, SlashCommand } from '../../../handler';
+import {
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
+  MessageFlags
+} from 'discord.js';
 
-// Types
-export type Color = 'red' | 'green' | 'blue' | 'yellow' | 'wild';
-export type Value =
-  | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
-  | 'skip' | 'reverse' | 'draw2'
-  | 'wild' | 'wild+4';
+const deck = [
+  'RED 1', 'RED 1', 'BLUE 1', 'BLUE 1', 'YELLOW 1', 'YELLOW 1', 'GREEN 1', 'GREEN 1',
+  'RED 2', 'RED 2', 'BLUE 2', 'BLUE 2', 'YELLOW 2', 'YELLOW 2', 'GREEN 2', 'GREEN 2',
+  'RED 3', 'RED 3', 'BLUE 3', 'BLUE 3', 'YELLOW 3', 'YELLOW 3', 'GREEN 3', 'GREEN 3',
+  'RED 4', 'RED 4', 'BLUE 4', 'BLUE 4', 'YELLOW 4', 'YELLOW 4', 'GREEN 4', 'GREEN 4',
+  'RED 5', 'RED 5', 'BLUE 5', 'BLUE 5', 'YELLOW 5', 'YELLOW 5', 'GREEN 5', 'GREEN 5',
+  'RED 6', 'RED 6', 'BLUE 6', 'BLUE 6', 'YELLOW 6', 'YELLOW 6', 'GREEN 6', 'GREEN 6',
+  'RED 7', 'RED 7', 'BLUE 7', 'BLUE 7', 'YELLOW 7', 'YELLOW 7', 'GREEN 7', 'GREEN 7',
+  'RED 8', 'RED 8', 'BLUE 8', 'BLUE 8', 'YELLOW 8', 'YELLOW 8', 'GREEN 8', 'GREEN 8',
+  'RED 9', 'RED 9', 'BLUE 9', 'BLUE 9', 'YELLOW 9', 'YELLOW 9', 'GREEN 9', 'GREEN 9',
+  'RED 0', 'BLUE 0', 'YELLOW 0', 'GREEN 0',
+  'RED +2', 'RED +2', 'RED REV', 'RED REV', 'RED SKIP', 'RED SKIP',
+  'BLUE +2', 'BLUE +2', 'BLUE REV', 'BLUE REV', 'BLUE SKIP', 'BLUE SKIP',
+  'YELLOW +2', 'YELLOW +2', 'YELLOW REV', 'YELLOW REV', 'YELLOW SKIP', 'YELLOW SKIP',
+  'GREEN +2', 'GREEN +2', 'GREEN REV', 'GREEN REV', 'GREEN SKIP', 'GREEN SKIP',
+  'WILD', 'WILD', 'WILD', 'WILD',
+  '+4', '+4', '+4', '+4'
+];
 
-export interface Card {
-  color: Color;
-  value: Value;
-}
-
-// Create and shuffle a full UNO deck
-export function createDeck(): Card[] {
-  const deck: Card[] = [];
-  const colors: Color[] = ['red', 'green', 'blue', 'yellow'];
-
-  for (const color of colors) {
-    // One 0 card per color
-    deck.push({ color, value: '0' });
-
-    // Two of each 1-9, skip, reverse, draw2 per color
-    const values: Value[] = [
-      '1','2','3','4','5','6','7','8','9',
-      'skip','reverse','draw2'
-    ];
-
-    for (const value of values) {
-      deck.push({ color, value });
-      deck.push({ color, value });
-    }
-  }
-
-  // Wild cards
-  for (let i = 0; i < 4; i++) {
-    deck.push({ color: 'wild', value: 'wild' });
-    deck.push({ color: 'wild', value: 'wild+4' });
-  }
-
-  return shuffle(deck);
-}
-
-// Shuffle deck in place
-export function shuffle(deck: Card[]): Card[] {
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
-  }
-  return deck;
-}
-
-// Deal hand to player
-export function dealHand(deck: Card[], count: number = 7): Card[] {
-  const hand: Card[] = [];
+function dealHand(count = 7): string[] {
+  deck.sort(() => Math.random() - 0.5);
+  const hand = [];
   for (let i = 0; i < count; i++) {
-    const card = deck.pop();
-    if (card) hand.push(card);
+    hand.push(deck.pop()!);
   }
   return hand;
 }
 
-// Debug test
-const deck = createDeck();
-const playerHand = dealHand(deck);
+export default new SlashCommand({
+  registerType: RegisterType.Guild,
+  data: new SlashCommandBuilder()
+    .setName('uno')
+    .setDescription('Start a single-player UNO match!'),
 
-console.log('Player Hand:', playerHand);
-console.log('Deck Remaining:', deck.length);
+  async execute(interaction: ChatInputCommandInteraction) {
+    const playerHand = dealHand();
+    const aiHand = dealHand();
+    const topCard = deck.pop()!;
+
+    // Create embed showing game status
+    const embed = new EmbedBuilder()
+      .setTitle('🎮 UNO - Your Move!')
+      .setDescription(`🃏 Top Card: **${topCard}**\n\nYour Hand:\n${playerHand.map((c) => `• ${c}`).join('\n')}`)
+      .setColor('Random');
+
+    // Create buttons for player's hand (max 5 per row)
+    const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+    for (let i = 0; i < playerHand.length; i += 5) {
+      const slice = playerHand.slice(i, i + 5);
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        slice.map((card) =>
+          new ButtonBuilder()
+            .setCustomId(`uno_card_${card}`)
+            .setLabel(card)
+            .setStyle(ButtonStyle.Primary)
+        )
+      );
+      rows.push(row);
+    }
+
+    await interaction.reply({
+      embeds: [embed],
+      components: rows,
+      flags: [MessageFlags.Ephemeral],
+    });
+
+    // Ready for future: collector, move validation, AI turns
+  },
+});
