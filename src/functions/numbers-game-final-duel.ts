@@ -1,13 +1,11 @@
 import { 
   TextChannel, 
   EmbedBuilder, 
-  ActionRowBuilder, 
-  ButtonBuilder, 
-  ButtonStyle, 
-  ComponentType, 
-  ButtonInteraction 
+  MessageCollector,
+  User,
+  DMChannel
 } from 'discord.js';
-import { GameState, Player } from './numbers-game-state';
+import { GameState, Player } from './gameState';
 
 export async function runFinalDuelRound(channel: TextChannel, gameState: GameState): Promise<void> {
   // Reset for new round
@@ -22,119 +20,105 @@ export async function runFinalDuelRound(channel: TextChannel, gameState: GameSta
   const playerA = alivePlayers[0];
   const playerB = alivePlayers[1];
   
-  // Start the round
+  // Start the round - announce in main channel
   const roundEmbed = new EmbedBuilder()
     .setTitle(`⚔️ Round ${gameState.currentRound} - Final Duel`)
     .setDescription(`Only two players remain! This is the final duel.`)
     .addFields(
       { name: 'Players', value: `<@${playerA.id}> (${playerA.lives} ❤️) vs <@${playerB.id}> (${playerB.lives} ❤️)` },
-      { name: 'Instructions', value: `Each player must choose either 0 or 100.\n<@${playerA.id}> wants to choose the same number as <@${playerB.id}>.\n<@${playerB.id}> wants to choose a different number from <@${playerA.id}>.` }
+      { name: 'Instructions', value: `Each player will receive a DM to make their choice.\n<@${playerA.id}> wants to choose the same number as <@${playerB.id}>.\n<@${playerB.id}> wants to choose a different number from <@${playerA.id}>.` }
     )
     .setColor(0xff0000)
     .setFooter({ text: 'You have 20 seconds to choose' });
   
   await channel.send({ embeds: [roundEmbed] });
-
+  
   // Randomly decide who goes first
   const firstPlayer = Math.random() < 0.5 ? playerA : playerB;
   const secondPlayer = firstPlayer === playerA ? playerB : playerA;
   
   await channel.send(`<@${firstPlayer.id}> will choose first, then <@${secondPlayer.id}>.`);
-
-  // First player chooses
-  const firstPlayerChoice = await getPlayerChoiceWithButtons(channel, firstPlayer);
-  await channel.send(`<@${firstPlayer.id}> has made their choice.`);
-
-  // Second player chooses
-  const secondPlayerChoice = await getPlayerChoiceWithButtons(channel, secondPlayer);
-
-  // Process results
-  await processResults(channel, gameState, playerA, playerB, firstPlayer, firstPlayerChoice, secondPlayerChoice);
+  
+  try {
+    // First player chooses via DM
+    const firstPlayerChoice = await getPlayerChoiceViaDM(channel, firstPlayer);
+    await channel.send(`<@${firstPlayer.id}> has made their choice.`);
+    
+    // Second player chooses via DM
+    const secondPlayerChoice = await getPlayerChoiceViaDM(channel, secondPlayer);
+    
+    // Process results
+    await processResults(channel, gameState, playerA, playerB, firstPlayer, firstPlayerChoice, secondPlayerChoice);
+  } catch (error) {
+    console.error('Error in final duel:', error);
+    await channel.send('There was an error processing the final duel. Please try again.');
+  }
 }
 
-async function getPlayerChoiceWithButtons(channel: TextChannel, player: Player): Promise<number> {
-  // Send buttons for 0 and 100
-  const row = new ActionRowBuilder<ButtonBuilder>()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId(`choose_0_${player.id}`)
-        .setLabel('0')
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(`choose_100_${player.id}`)
-        .setLabel('100')
-        .setStyle(ButtonStyle.Primary)
-    );
-
-  const prompt = await channel.send({
-    content: `<@${player.id}>, it's your turn. Choose **0** or **100**:`,
-    components: [row]
-  });
-
-  // Wait for button interaction
-  return new Promise(resolve => {
-    const collector = channel.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: 300000,
-      filter: (i: ButtonInteraction) => i.user.id === player.id && (i.customId === `choose_0_${player.id}` || i.customId === `choose_100_${player.id}`)
+async function getPlayerChoiceViaDM(channel: TextChannel, player: Player): Promise<number> {
+  try {
+    // Get user from client users cache
+    const user = await channel.client.users.fetch(player.id);
+    if (!user) {
+      throw new Error(`Could not find user with ID ${player.id}`);
+    }
+    
+    // Send DM to player
+    const dmEmbed = new EmbedBuilder()
+      .setTitle('⚔️ Final Duel - Your Turn')
+      .setDescription(`It's your turn to choose in the final duel.`)
+      .addFields(
+        { name: 'Instructions', value: `Type **choose 0** or **choose 100** to make your selection.` }
+      )
+      .setColor(0xff0000)
+      .setFooter({ text: 'You have 20 seconds to choose' });
+    
+    const dmMessage = await user.send({ embeds: [dmEmbed] });
+    
+    // Create filter for player's choice in DM
+    const filter = (m: any) => {
+      if (m.author.id !== player.id) return false;
+      
+      const content = m.content.toLowerCase().trim();
+      if (!content.startsWith('choose ')) return false;
+      
+      const choice = parseInt(content.substring(7));
+      return choice === 0 || choice === 100;
+    };
+    
+    // Create collector for DM channel
+    const dmChannel = await user.createDM();
+    const collector = dmChannel.createMessageCollector({ filter, time: 20000, max: 1 });
+    
+    // Return a promise that resolves when player makes a choice
+    return new Promise((resolve, reject) => {
+      collector.on('collect', message => {
+        const content = message.content.toLowerCase().trim();
+        const choice = parseInt(content.substring(7));
+        player.currentNumber = choice;
+        user.send(`You chose ${choice}. Wait for results...`);
+        resolve(choice);
+      });
+      
+      collector.on('end', collected => {
+        if (collected.size === 0) {
+          // Player didn't choose in time - assign random choice
+          const randomChoice = Math.random() < 0.5 ? 0 : 100;
+          player.currentNumber = randomChoice;
+          user.send(`You didn't choose in time. Randomly assigned: ${randomChoice}`);
+          channel.send(`<@${player.id}> didn't choose in time. Randomly assigned: ${randomChoice}`);
+          resolve(randomChoice);
+        }
+      });
     });
-
-    let resolved = false;
-
-    collector.on('collect', async (interaction: ButtonInteraction) => {
-      await interaction.deferUpdate(); // Acknowledge immediately
-      const choice = interaction.customId.startsWith('choose_0_') ? 0 : 100;
-      player.currentNumber = choice;
-      resolved = true;
-
-      // Disable buttons after selection
-      const disabledRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId(`choose_0_${player.id}`)
-            .setLabel('0')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(true),
-          new ButtonBuilder()
-            .setCustomId(`choose_100_${player.id}`)
-            .setLabel('100')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(true)
-        );
-      await prompt.edit({ components: [disabledRow] });
-
-      await channel.send(`<@${player.id}> chose **${choice}**. Wait for results...`);
-      collector.stop();
-      resolve(choice);
-    });
-
-    collector.on('end', async collected => {
-      if (!resolved) {
-        // Player didn't choose in time - assign random choice
-        const randomChoice = Math.random() < 0.5 ? 0 : 100;
-        player.currentNumber = randomChoice;
-
-        // Disable buttons after timeout
-        const disabledRow = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(`choose_0_${player.id}`)
-              .setLabel('0')
-              .setStyle(ButtonStyle.Primary)
-              .setDisabled(true),
-            new ButtonBuilder()
-              .setCustomId(`choose_100_${player.id}`)
-              .setLabel('100')
-              .setStyle(ButtonStyle.Primary)
-              .setDisabled(true)
-          );
-        await prompt.edit({ components: [disabledRow] });
-
-        await channel.send(`<@${player.id}> didn't choose in time. Randomly assigned: **${randomChoice}**`);
-        resolve(randomChoice);
-      }
-    });
-  });
+  } catch (error) {
+    console.error(`Error sending DM to player ${player.id}:`, error);
+    // Fall back to random choice if DM fails
+    const randomChoice = Math.random() < 0.5 ? 0 : 100;
+    player.currentNumber = randomChoice;
+    channel.send(`Could not DM <@${player.id}>. Randomly assigned: ${randomChoice}`);
+    return randomChoice;
+  }
 }
 
 async function processResults(
