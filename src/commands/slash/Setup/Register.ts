@@ -5,6 +5,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   type ChatInputCommandInteraction,
+  MessageFlags,
   EmbedBuilder,
   SlashCommandBuilder,
   ComponentType,
@@ -14,6 +15,8 @@ import {
 import { setTimeout as sleep } from 'node:timers/promises';
 import { UserService } from '../../../services/user_services';
 import { PRISON_COLORS, STARTER_ITEMS } from '../../../constants/GAME_CONSTANTS';
+import { Device } from '../../../model/Device_schema';
+
 
 export default new SlashCommand({
   registerType: RegisterType.Guild,
@@ -148,8 +151,83 @@ export default new SlashCommand({
           break;
       }
     });
+    collector?.on('end', async () => {
+      try {
+        await interaction.editReply({
+          components: [] // Remove all components
+        });
+      } catch (error) {
+        console.error('Failed to remove components:', error);
+      }
+    });
+    await sleep(60000);
+
+    try {
+      // Use findOneAndUpdate instead of separate find and update operations
+      const updatedDevice = await Device.findOneAndUpdate(
+        { discordId: userId },
+        {
+          $set: { activated: true },
+          $push: {
+            messages: {
+              sender: '???',
+              content: 'You feel a cold object in your hand. A hidden device? Use `/device` to access it. Trust no one.',
+              sentAt: new Date(),
+              read: false
+            }
+          }
+        },
+        {
+          upsert: true, // Create if doesn't exist
+          new: true, // Return the updated document
+          setDefaultsOnInsert: true // Apply schema defaults on insert
+        }
+      );
+    
+      if (!updatedDevice) {
+        throw new Error('Failed to create or update device');
+      }
+    
+    } catch (error) {
+      console.error('Error managing device:', error);
+      throw error; // Re-throw to handle in calling function
+  }
+    
+  const mysteriousEmbed = new EmbedBuilder()
+      .setColor('#6f42c1')
+      .setTitle('A Mysterious Device...')
+      .setDescription('A cryptic message appears on a hidden screen:\n\n*You have been chosen. Use `/device` to connect. Beware the eyes in the dark...*')
+      .setFooter({ text: 'The device vibrates softly in your palm.' });
+    
+  await interaction.followUp({ embeds: [mysteriousEmbed], flags: [MessageFlags.Ephemeral] }); 
+  newUser.deviceActivated = true; 
+  await newUser.save();
+  await sleep(2000);
   },
 });
+
+async function createWelcomeEmbed(userId: string, crime: string, userAvatar: string) {
+  return new EmbedBuilder()
+    .setColor(PRISON_COLORS.danger as ColorResolvable)
+    .setTitle(`🔒 WELCOME TO INFINITE PRISON - INMATE #${userId.slice(-6)}`)
+    .setDescription(`*"${crime}"*\n\nYour sentence begins today. There is no escape from the Infinite Prison.`)
+    .setThumbnail(userAvatar)
+    .addFields(
+      { 
+        name: '📜 Prison Rules', 
+        value: '1. Obey all guard instructions\n2. No escape attempts\n3. Daily check-ins required\n4. No contraband items\n5. Maintain acceptable sanity levels' 
+      },
+      { 
+        name: '🎮 How To Play', 
+        value: 'The Infinite Prison is a daily survival game. Complete activities, earn merit points, and try to maintain your sanity while avoiding suspicion. Use `/profile` to check your status and `/activities` to see available actions.' 
+      },
+      { 
+        name: '⚠️ Warning', 
+        value: 'Your actions have consequences. High suspicion levels will result in isolation. Low sanity may lead to hallucinations or worse.' 
+      }
+    )
+    .setFooter({ text: `Incarceration Date: ${new Date().toLocaleDateString()}` });
+}
 
 async function showTutorial(interaction: ButtonInteraction) {
   const tutorialEmbed = new EmbedBuilder()
@@ -196,6 +274,14 @@ async function showTutorial(interaction: ButtonInteraction) {
   });
   
   collector?.on('collect', async (i: ButtonInteraction) => {
+    await i.deferUpdate();
+        
+    const welcomeEmbed = await createWelcomeEmbed(
+      interaction.user.id,
+      interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity",
+      interaction.user.displayAvatarURL()
+    );
+    
     // Recreate the original welcome message buttons
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -212,7 +298,21 @@ async function showTutorial(interaction: ButtonInteraction) {
         .setStyle(ButtonStyle.Success)
     );
     
-    await i.update({ components: [buttonRow] });
+    await i.editReply({
+      content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
+      embeds: [welcomeEmbed],
+      components: [buttonRow]
+    });
+
+  });
+  collector?.on('end', async () => {
+    try {
+      await interaction.editReply({
+        components: [] // Remove all components
+      });
+    } catch (error) {
+      console.error('Failed to remove components:', error);
+    }
   });
 }
 
@@ -257,7 +357,14 @@ async function showActivities(interaction: ButtonInteraction) {
   });
   
   collector?.on('collect', async (i: ButtonInteraction) => {
-    // Recreate the original welcome message buttons
+    await i.deferUpdate();
+        
+    const welcomeEmbed = await createWelcomeEmbed(
+      interaction.user.id,
+      interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity",
+      interaction.user.displayAvatarURL()
+    );
+    
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('register:tutorial')
@@ -272,7 +379,20 @@ async function showActivities(interaction: ButtonInteraction) {
         .setLabel('🎯 Available Activities')
         .setStyle(ButtonStyle.Success)
     );
-    
-    await i.update({ components: [buttonRow] });
+    await i.editReply({
+      content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
+      embeds: [welcomeEmbed],
+      components: [buttonRow]
+    });
   });
+  collector?.on('end', async () => {
+    try {
+      await interaction.editReply({
+        components: [] // Remove all components
+      });
+    } catch (error) {
+      console.error('Failed to remove components:', error);
+    }
+  });
+  
 }

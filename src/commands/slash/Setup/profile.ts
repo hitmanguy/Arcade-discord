@@ -39,11 +39,6 @@ export default new SlashCommand({
     )
     .addSubcommand(subcommand =>
       subcommand
-        .setName('customize')
-        .setDescription('Customize your prison profile')
-    )
-    .addSubcommand(subcommand =>
-      subcommand
         .setName('stats')
         .setDescription('View detailed stats about your prison life')
     ) as SlashCommandBuilder,
@@ -60,21 +55,22 @@ export default new SlashCommand({
     let userData = await UserService.getUserData(targetUser.id, member);
     
     if (!userData) {
-      await interaction.editReply({ content: `❌ Seems like you have'nt yet registered to the Game, please type /register to continue.` });
+      const notRegisteredEmbed = new EmbedBuilder()
+        .setColor(PRISON_COLORS.warning as ColorResolvable)
+        .setTitle('❌ Not Registered')
+        .setDescription('You haven\'t registered to the Infinite Prison yet.')
+        .addFields({
+          name: 'How to Register',
+          value: 'Use `/register` to begin your sentence in the Infinite Prison.'
+        });
+      
+      await interaction.editReply({ embeds: [notRegisteredEmbed] });
       return;
     }
     
     if (subcommand === 'view') {
       await showProfile(interaction, userData, member);
-    } else if (subcommand === 'customize') {
-      if (targetUser.id !== interaction.user.id) {
-        await interaction.editReply({
-          content: '❌ You can only customize your own profile!'
-        });
-        return;
-      }
-      await showCustomizationMenu(interaction, userData);
-    } else if (subcommand === 'stats') {
+    }  else if (subcommand === 'stats') {
       await showDetailedStats(interaction, userData);
     }
   },
@@ -130,10 +126,13 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
     components: [row]
   });
   
+  // Set timeout duration to 60 seconds
+  const timeoutDuration = 60000;
+  
   const collector = interaction.channel?.createMessageComponentCollector({
     componentType: ComponentType.Button,
     filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('profile:'),
-    time: 120000
+    time: timeoutDuration
   });
   
   collector?.on('collect', async (i: ButtonInteraction) => {
@@ -159,7 +158,16 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
   });
   
   collector?.on('end', () => {
-    interaction.editReply({ components: [] }).catch(() => {});
+    const timeoutEmbed = new EmbedBuilder()
+      .setColor(PRISON_COLORS.primary as ColorResolvable)
+      .setTitle(`🔒 INFINITE PRISON - INMATE #${userData.discordId.slice(-6)}`)
+      .setDescription('**Session timed out**\nThe terminal has automatically logged out due to inactivity.')
+      .setFooter({ text: 'Use the /profile command again to access your data' });
+    
+    interaction.editReply({ 
+      embeds: [timeoutEmbed], 
+      components: [] 
+    }).catch(() => {});
   });
 }
 
@@ -179,6 +187,7 @@ async function showInventory(interaction: ButtonInteraction, userData: UserDocum
       .setStyle(ButtonStyle.Secondary)
   );
   
+  // Update with current components - the collector from the parent function handles the timeout
   await interaction.update({
     embeds: [inventoryEmbed],
     components: [backButton]
@@ -202,6 +211,7 @@ async function showStats(interaction: ButtonInteraction, userData: UserDocument)
       .setStyle(ButtonStyle.Secondary)
   );
   
+  // Update with current components - the collector from the parent function handles the timeout
   await interaction.update({
     embeds: [statsEmbed],
     components: [backButton]
@@ -224,94 +234,10 @@ async function showExploredRooms(interaction: ButtonInteraction, userData: UserD
       .setStyle(ButtonStyle.Secondary)
   );
   
+  // Update with current components - the collector from the parent function handles the timeout
   await interaction.update({
     embeds: [roomsEmbed],
     components: [backButton]
-  });
-}
-
-async function showCustomizationMenu(interaction: ChatInputCommandInteraction, userData: UserDocument) {
-  const customizeEmbed = new EmbedBuilder()
-    .setColor(PRISON_COLORS.secondary as ColorResolvable)
-    .setTitle('✏️ Customize Your Inmate Profile')
-    .setDescription('Select an option to customize your profile:')
-    .setFooter({ text: 'Changes cost merit points, earned through prison activities' });
-  
-  const customizeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId('customize:username')
-      .setLabel('👤 Change Username')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId('customize:device')
-      .setLabel(`💻 ${userData.deviceActivated ? 'Deactivate' : 'Activate'} Device`)
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('customize:cancel')
-      .setLabel('❌ Cancel')
-      .setStyle(ButtonStyle.Danger)
-  );
-  
-  await interaction.editReply({
-    embeds: [customizeEmbed],
-    components: [customizeRow]
-  });
-  
-  const collector = interaction.channel?.createMessageComponentCollector({
-    componentType: ComponentType.Button,
-    filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('customize:'),
-    time: 60000
-  });
-  
-  collector?.on('collect', async (i: ButtonInteraction) => {
-    const action = i.customId.split(':')[1];
-    
-    switch (action) {
-      case 'username':
-        await i.update({
-          content: 'Username change functionality is coming soon...',
-          embeds: [],
-          components: []
-        });
-        break;
-      case 'device':
-        const updatedUser = await UserService.updateUserStats(userData.discordId, {
-          deviceActivated: !userData.deviceActivated
-        });
-        
-        if (!updatedUser) {
-          await i.update({
-            content: '❌ Failed to update device status',
-            embeds: [],
-            components: []
-          });
-          return;
-        }
-        
-        await i.update({
-          content: `✅ Device ${updatedUser.deviceActivated ? 'activated' : 'deactivated'} successfully!`,
-          embeds: [],
-          components: []
-        });
-        break;
-      case 'cancel':
-        await i.update({
-          content: 'Customization canceled',
-          embeds: [],
-          components: []
-        });
-        break;
-    }
-  });
-  
-  collector?.on('end', (collected) => {
-    if (collected.size === 0) {
-      interaction.editReply({
-        content: 'Customization session timed out',
-        embeds: [],
-        components: []
-      }).catch(() => {});
-    }
   });
 }
 
@@ -359,10 +285,13 @@ async function showDetailedStats(interaction: ChatInputCommandInteraction, userD
     components: [actionsRow]
   });
   
+  // Set timeout duration to 60 seconds
+  const timeoutDuration = 60000;
+  
   const collector = interaction.channel?.createMessageComponentCollector({
     componentType: ComponentType.Button,
     filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('stats:'),
-    time: 60000
+    time: timeoutDuration
   });
   
   collector?.on('collect', async (i: ButtonInteraction) => {
@@ -378,6 +307,15 @@ async function showDetailedStats(interaction: ChatInputCommandInteraction, userD
   });
   
   collector?.on('end', () => {
-    interaction.editReply({ components: [] }).catch(() => {});
+    const timeoutEmbed = new EmbedBuilder()
+      .setColor(PRISON_COLORS.primary as ColorResolvable)
+      .setTitle(`📊 INMATE STATISTICS - #${userData.discordId.slice(-6)}`)
+      .setDescription('**Session timed out**\nStatistics terminal has been locked due to inactivity.')
+      .setFooter({ text: 'Use the /profile stats command again to view your data' });
+    
+    interaction.editReply({ 
+      embeds: [timeoutEmbed], 
+      components: [] 
+    }).catch(() => {});
   });
 }

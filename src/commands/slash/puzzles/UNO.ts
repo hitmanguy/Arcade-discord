@@ -9,7 +9,7 @@ import {
   ButtonInteraction,
   ComponentType
 } from 'discord.js';
- const { Game, Card } = require('./unogame-js');
+ const { Game, Card } = require('unogame-js');
 
 export default new SlashCommand({
   registerType: RegisterType.Guild,
