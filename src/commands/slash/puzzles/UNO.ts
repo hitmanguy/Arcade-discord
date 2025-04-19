@@ -58,6 +58,139 @@ function isValidPlay(topCard: string, playedCard: string): boolean {
   );
 }
 
+async function botTurn(
+    interaction: ButtonInteraction,
+    botHand: string[],
+    topCard: string
+  ): Promise<{ newTopCard: string, updatedBotHand: string[] }> {
+    // Wait a moment to simulate "thinking"
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Find valid cards the bot can play
+    const validCards = botHand.filter(card => isValidPlay(topCard, card));
+    
+    if (validCards.length === 0) {
+      // Draw a card if no valid moves
+      const drawnCard = deck.pop()!;
+      botHand.push(drawnCard);
+      
+      await interaction.followUp({
+        content: `🤖 Bot has no valid cards and draws a card.`,
+        ephemeral: false
+      });
+      
+      // Check if drawn card can be played
+      if (isValidPlay(topCard, drawnCard)) {
+        // Play the drawn card if valid
+        botHand.pop(); // Remove the card we just drew
+        
+        await interaction.followUp({
+          content: `🤖 Bot plays the drawn card: ${drawnCard}`,
+          ephemeral: false
+        });
+        
+        return {
+          newTopCard: drawnCard,
+          updatedBotHand: botHand
+        };
+      }
+      
+      return {
+        newTopCard: topCard,
+        updatedBotHand: botHand
+      };
+    }
+    
+    // Bot prioritizes which card to play based on strategy
+    
+    // Strategy 1: Play special cards first (especially if bot is behind)
+    const specialCards = validCards.filter(card => 
+      card.includes('SKIP') || card.includes('REV') || card.includes('+2') || card.includes('+4')
+    );
+    
+    // Strategy 2: Play number cards matching the current top card color
+    const matchingColorCards = validCards.filter(card => 
+      parseCard(card).color === parseCard(topCard).color && !specialCards.includes(card)
+    );
+    
+    // Strategy 3: Play number cards matching the current top card value
+    const matchingValueCards = validCards.filter(card => 
+      parseCard(card).value === parseCard(topCard).value && !specialCards.includes(card)
+    );
+    
+    // Strategy 4: Play wild cards as last resort
+    const wildCards = validCards.filter(card => 
+      card === 'WILD' || card === '+4'
+    );
+    
+    // Choose card based on priority
+    let selectedCard: string;
+    
+    if (botHand.length <= 2 && specialCards.length > 0) {
+      // If bot is about to win, prioritize playing special cards
+      selectedCard = specialCards[0];
+    } else if (matchingColorCards.length > 0) {
+      // Prefer matching color cards
+      selectedCard = matchingColorCards[0];
+    } else if (matchingValueCards.length > 0) {
+      // Then matching value cards
+      selectedCard = matchingValueCards[0];
+    } else if (specialCards.length > 0) {
+      // Then special cards
+      selectedCard = specialCards[0];
+    } else {
+      // Wild cards as last resort
+      selectedCard = wildCards[0];
+    }
+    
+    // Remove the selected card from bot's hand
+    const cardIndex = botHand.indexOf(selectedCard);
+    botHand.splice(cardIndex, 1);
+    
+    // Handle wild card color selection (choose most common color in hand)
+    let newColor = '';
+    if (selectedCard === 'WILD' || selectedCard === '+4') {
+      const colorCounts: Record<string, number> = {
+        'RED': 0,
+        'BLUE': 0,
+        'GREEN': 0,
+        'YELLOW': 0
+      };
+      
+      botHand.forEach(card => {
+        const cardColor = parseCard(card).color;
+        if (cardColor && cardColor !== 'WILD') {
+          colorCounts[cardColor]++;
+        }
+      });
+      
+      // Find most common color
+      newColor = Object.entries(colorCounts)
+        .sort((a, b) => b[1] - a[1])[0][0];
+        
+      await interaction.followUp({
+        content: `🤖 Bot plays: ${selectedCard}\n🤖 Bot chooses color: ${newColor}`,
+        ephemeral: false
+      });
+      
+      // For wild cards, set the new top card with the selected color
+      return {
+        newTopCard: newColor + ' ' + selectedCard,
+        updatedBotHand: botHand
+      };
+    }
+    
+    await interaction.followUp({
+      content: `🤖 Bot plays: ${selectedCard}`,
+      ephemeral: false
+    });
+    
+    return {
+      newTopCard: selectedCard,
+      updatedBotHand: botHand
+    };
+  }
+
 async function handleCardPlay(
     interaction: ButtonInteraction,
     playerHand: string[],
@@ -118,6 +251,7 @@ export default new SlashCommand({
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
     let playerHand = dealHand();
     let topCard = deck.pop()!;
+    let botHand = dealHand();
 
     const introEmbed = new EmbedBuilder()
       .setTitle('🎮 UNO - Your Move!')
@@ -155,18 +289,159 @@ export default new SlashCommand({
     });
 
     collector.on('collect', async (btn) => {
-      if (btn.user.id !== interaction.user.id) {
-        return btn.reply({ content: 'This isn’t your game!', ephemeral: true });
-      }
-
-      const result = await handleCardPlay(btn, playerHand, topCard);
-      if (!result) return;
-
-      topCard = result.newTopCard;
-      playerHand = result.updatedPlayerHand;
-
-      // TODO: Add your bot's move here
-    });
+        if (btn.user.id !== interaction.user.id) {
+          return btn.reply({ content: 'This isn\'t your game!', ephemeral: true });
+        }
+      
+        const result = await handleCardPlay(btn, playerHand, topCard);
+        if (!result) return;
+      
+        topCard = result.newTopCard;
+        playerHand = result.updatedPlayerHand;
+      
+        // Now add the bot's turn
+        const botResult = await botTurn(btn, botHand, topCard);
+        topCard = botResult.newTopCard;
+        botHand = botResult.updatedBotHand;
+      
+        // Update the game status after both turns
+        const gameStatusEmbed = new EmbedBuilder()
+          .setTitle('🎮 UNO - Your Move!')
+          .setDescription(`🃏 Top Card: **${topCard}**\n\nYour Hand:\n${playerHand.map((c) => `• ${c}`).join('\n')}\n\n🤖 Bot has ${botHand.length} cards left.`)
+          .setColor('Random');
+      
+        // Create new button rows for the updated player hand
+        const updatedRows: ActionRowBuilder<ButtonBuilder>[] = [];
+        for (let i = 0; i < playerHand.length; i += 5) {
+          const buttonRow = new ActionRowBuilder<ButtonBuilder>();
+          const chunk = playerHand.slice(i, i + 5);
+      
+          const buttons = chunk.map((card) =>
+            new ButtonBuilder()
+              .setCustomId(`card_${card}`)
+              .setLabel(card)
+              .setStyle(ButtonStyle.Secondary)
+          );
+      
+          buttonRow.addComponents(...buttons);
+          updatedRows.push(buttonRow);
+        }
+      
+        // Add a "Draw Card" button if there are enough cards left in the deck
+        if (deck.length > 0) {
+          const drawRow = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId('draw_card')
+                .setLabel('Draw Card')
+                .setStyle(ButtonStyle.Primary)
+            );
+          updatedRows.push(drawRow);
+        }
+      
+        // Send the updated game state
+        await btn.followUp({
+          content: 'Your turn:',
+          embeds: [gameStatusEmbed],
+          components: updatedRows,
+          ephemeral: true
+        });
+      
+        // Check for game end conditions
+        if (playerHand.length === 0) {
+          await btn.followUp({
+            content: '🎉 You win! The game is over.',
+            ephemeral: false
+          });
+          collector.stop('game_over');
+        } else if (botHand.length === 0) {
+          await btn.followUp({
+            content: '🤖 Bot wins! The game is over.',
+            ephemeral: false
+          });
+          collector.stop('game_over');
+        } else if (deck.length === 0) {
+          // Optionally end game when deck is empty, or implement reshuffling
+          await btn.followUp({
+            content: 'The deck is empty! Game ends in a draw.',
+            ephemeral: false
+          });
+          collector.stop('game_over');
+        }
+      });
+      
+      // Also add handling for the "Draw Card" button
+      collector.on('collect', async (btn) => {
+        // Existing code...
+        
+        // Add this part to handle drawing cards
+        if (btn.customId === 'draw_card') {
+          if (deck.length === 0) {
+            await btn.reply({ content: 'No cards left to draw!', ephemeral: true });
+            return;
+          }
+          
+          const drawnCard = deck.pop()!;
+          playerHand.push(drawnCard);
+          
+          await btn.update({
+            content: `You drew: ${drawnCard}`,
+            components: [], // Remove current buttons
+          });
+          
+          // Check if the drawn card can be played
+          const canPlay = isValidPlay(topCard, drawnCard);
+          
+          const gameStatusEmbed = new EmbedBuilder()
+            .setTitle('🎮 UNO - Your Move!')
+            .setDescription(`🃏 Top Card: **${topCard}**\n\nYour Hand:\n${playerHand.map((c) => `• ${c}`).join('\n')}\n\n🤖 Bot has ${botHand.length} cards left.`)
+            .setColor('Random');
+          
+          // Create new buttons for updated hand
+          const updatedRows: ActionRowBuilder<ButtonBuilder>[] = [];
+          for (let i = 0; i < playerHand.length; i += 5) {
+            const buttonRow = new ActionRowBuilder<ButtonBuilder>();
+            const chunk = playerHand.slice(i, i + 5);
+        
+            const buttons = chunk.map((card) =>
+              new ButtonBuilder()
+                .setCustomId(`card_${card}`)
+                .setLabel(card)
+                .setStyle(ButtonStyle.Secondary)
+            );
+        
+            buttonRow.addComponents(...buttons);
+            updatedRows.push(buttonRow);
+          }
+          
+          await btn.followUp({
+            content: canPlay ? `You drew: ${drawnCard}. You can play this card!` : `You drew: ${drawnCard}. Your turn is skipped.`,
+            embeds: [gameStatusEmbed],
+            components: updatedRows,
+            ephemeral: true
+          });
+          
+          // If player can't play, bot takes turn
+          if (!canPlay) {
+            const botResult = await botTurn(btn, botHand, topCard);
+            topCard = botResult.newTopCard;
+            botHand = botResult.updatedBotHand;
+            
+            // Update game status after bot's turn
+            const newStatusEmbed = new EmbedBuilder()
+              .setTitle('🎮 UNO - Your Move!')
+              .setDescription(`🃏 Top Card: **${topCard}**\n\nYour Hand:\n${playerHand.map((c) => `• ${c}`).join('\n')}\n\n🤖 Bot has ${botHand.length} cards left.`)
+              .setColor('Random');
+            
+            await btn.followUp({
+              content: 'Your turn:',
+              embeds: [newStatusEmbed],
+              components: updatedRows,
+              ephemeral: true
+            });
+          }
+        }
+      });
 
     collector.on('end', () => {
       // Maybe disable buttons or show a "Game over" message
