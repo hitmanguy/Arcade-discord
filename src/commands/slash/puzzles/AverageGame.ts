@@ -12,6 +12,7 @@ import {
   EmbedBuilder,
   SlashCommandBuilder,
   MessageComponentInteraction,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
   ComponentType,
@@ -499,6 +500,8 @@ async function startNewRound(client: any, gameState: GameState, gameCode: string
         collector.on('collect', async (i: ButtonInteraction) => {
         const range = i.customId.split(':')[3]; // e.g., "1-10", "11-20", etc.
 
+
+
         await i.update({
             content: `You selected range **${range}**. Now pick a number from that range.`,
             components: [] // optionally remove buttons
@@ -581,34 +584,40 @@ async function startNewRound(client: any, gameState: GameState, gameCode: string
     
     // Send DMs to each active player asking for their strategy
     for (const player of activePlayers) {
-      try {
-        const user = await client.users.fetch(player.id);
-        
-        const otherPlayers = activePlayers.filter(p => p.id !== player.id);
-        
-        const row = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(`borderland:strategy:${gameCode}:solo`)
-              .setLabel('Play Solo')
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(`borderland:strategy:${gameCode}:team`)
-              .setLabel('Propose Alliance')
-              .setStyle(ButtonStyle.Success)
-          );
-        
-        await user.send({
-          content: `🎮 **Round ${gameState.round} - Phase 2**\nWill you play solo or try to form an alliance?`,
-          components: [row]
-        });
-      } catch (error) {
-        console.error(`Failed to send DM to player ${player.id}:`, error);
-        // Mark player as inactive if we can't DM them
-        player.active = false;
+        try {
+          const user = await client.users.fetch(player.id);
+          
+          const otherPlayers = activePlayers.filter(p => p.id !== player.id);
+          
+          const row = new ActionRowBuilder<StringSelectMenuBuilder>()
+            .addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId(`borderland:strategy:${gameCode}`)
+                .setPlaceholder('Choose your strategy...')
+                .addOptions([
+                  {
+                    label: 'Play Solo',
+                    description: 'Compete alone this round',
+                    value: `solo`,
+                  },
+                  {
+                    label: 'Propose Alliance',
+                    description: 'Team up with someone else',
+                    value: `team`,
+                  },
+                ])
+            );
+          
+          await user.send({
+            content: `🎮 **Round ${gameState.round} - Phase 2**\nWill you play solo or try to form an alliance?`,
+            components: [row]
+          });
+        } catch (error) {
+          console.error(`Failed to send DM to player ${player.id}:`, error);
+          player.active = false;
+        }
       }
-    }
-    
+      
     // Set a timer for the round
     const roundDuration = 90000; // 90 seconds
     gameState.roundEndTime = Date.now() + roundDuration;
