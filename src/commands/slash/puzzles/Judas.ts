@@ -85,6 +85,15 @@ export default new SlashCommand({
         started: false,
       };
       games.set(channelId, game);
+
+      // Create the "Join" button
+      const joinButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId('join')
+          .setLabel('Join')
+          .setStyle(ButtonStyle.Success)
+      );
+
       await interaction.reply({
         embeds: [
           new EmbedBuilder()
@@ -92,7 +101,8 @@ export default new SlashCommand({
             .setDescription("Lobby created! Others can now `/judas join`.\n**Minimum: 3 players.**\nHost: <@" + interaction.user.id + ">")
             .addFields({ name: "Players", value: `<@${interaction.user.id}>` })
             .setColor(0x9b111e)
-        ]
+        ],
+        components: [joinButton],
       });
     }
 
@@ -115,6 +125,7 @@ export default new SlashCommand({
         revealed: false,
         secret: "",
       });
+
       await interaction.reply({ content: "You joined the Judas Protocol lobby!", ephemeral: true });
 
       const channel = interaction.channel as TextChannel;
@@ -196,6 +207,7 @@ function getRandomSystemLie(players: JudasGamePlayer[]): string {
   return phrase.replace('{player}', `<@${player.id}>`);
 }
 
+// Phase functions remain unchanged
 async function runPhase1(interaction: ChatInputCommandInteraction, game: JudasGame) {
   const channel = interaction.channel as TextChannel;
 
