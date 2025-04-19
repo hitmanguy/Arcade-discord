@@ -16,7 +16,7 @@ const values = [
   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
   'Draw Two', 'Skip', 'Reverse',
 ];
-const wilds = ['Wild', 'Wild Draw Four'];
+const wilds = ['Wild', 'Draw Four'];
 
 function buildDeck(): string[] {
   const deck: string[] = [];
@@ -42,7 +42,7 @@ function shuffleDeck(deck: string[]): string[] {
 }
 
 function canPlay(topCard: string, card: string): boolean {
-  if (card.includes('Wild')) return true;
+  if (card.includes('Wild') || card.includes('Draw Four')) return true;
   const [topColour, ...topVal] = topCard.split(' ');
   const topValue = topVal.join(' ');
   return card.includes(topColour) || card.includes(topValue);
@@ -50,7 +50,7 @@ function canPlay(topCard: string, card: string): boolean {
 
 function getValidStartingCard(deck: string[]): string {
   let card = deck.shift()!;
-  while (card.includes('Wild') || card.includes('Skip') || card.includes('Reverse')) {
+  while (card.includes('Wild') || card.includes('Skip') || card.includes('Reverse') || card.includes('Draw Four')) {
     deck.push(card);
     card = deck.shift()!;
   }
@@ -96,10 +96,7 @@ export default new SlashCommand({
         );
 
         await interaction.editReply({
-          content: `🎮 **UNO**
-Top Card: **${topCard}**
-Your Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}
-Bot has ${botHand.length} cards.`,
+          content: `🎮 **UNO**\nTop Card: **${topCard}**\nYour Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}\nBot has ${botHand.length} cards.`,
           components: [row],
         });
 
@@ -133,7 +130,7 @@ Bot has ${botHand.length} cards.`,
           discardPile.push(chosen);
           topCard = chosen;
 
-          if (chosen.includes('Wild')) {
+          if (chosen.includes('Wild') || chosen.includes('Draw Four')) {
             const colorSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
               new StringSelectMenuBuilder()
                 .setCustomId('uno:choosecolor')
@@ -153,7 +150,7 @@ Bot has ${botHand.length} cards.`,
               if (chosen.includes('Draw Four')) {
                 botHand.push(...deck.splice(0, 4));
               }
-              await selectInt.update({ content: `You chose **${currentColor}**`, components: [] });
+              await selectInt.update({ content: `You chose **${currentColor}**. You played \`${chosen}\`.`, components: [] });
               isPlayerTurn = false;
               setTimeout(playTurn, 2000);
             });
@@ -181,32 +178,36 @@ Bot has ${botHand.length} cards.`,
       } else {
         const playable = botHand.filter(c => canPlay(topCard, c));
         let chosen: string;
+        let botPlayMessage = '';
         if (playable.length === 0) {
           const drawn = deck.shift()!;
           botHand.push(drawn);
-          isPlayerTurn = true;
-          return setTimeout(playTurn, 1000);
+          botPlayMessage = `🤖 Bot drew a card.`;
         } else {
           chosen = playable[Math.floor(Math.random() * playable.length)];
           botHand.splice(botHand.indexOf(chosen), 1);
           discardPile.push(chosen);
           topCard = chosen;
-          currentColor = chosen.includes('Wild') ? colours[Math.floor(Math.random() * 4)] : chosen.split(' ')[0];
+          currentColor = chosen.includes('Wild') || chosen.includes('Draw Four') ? colours[Math.floor(Math.random() * 4)] : chosen.split(' ')[0];
 
           if (chosen.includes('Draw Four')) playerHand.push(...deck.splice(0, 4));
           if (chosen.includes('Draw Two')) playerHand.push(...deck.splice(0, 2));
-          if (chosen.includes('Skip') || chosen.includes('Reverse')) {
-            await interaction.followUp({ content: `🤖 Bot played \`${chosen}\`. Your turn skipped!`, ephemeral: true });
-            return setTimeout(() => {
-              isPlayerTurn = false;
-              playTurn();
-            }, 2000);
-          }
 
-          await interaction.followUp({ content: `🤖 Bot played \`${chosen}\`.`, ephemeral: true });
-          isPlayerTurn = true;
-          setTimeout(playTurn, 2000);
+          if (chosen.includes('Skip') || chosen.includes('Reverse')) {
+            botPlayMessage = `🤖 Bot played \`${chosen}\`. Your turn skipped!`;
+            isPlayerTurn = false;
+          } else {
+            botPlayMessage = `🤖 Bot played \`${chosen}\`.`;
+            isPlayerTurn = true;
+          }
         }
+
+        await interaction.editReply({
+          content: `🎮 **UNO**\nTop Card: **${topCard}**\nYour Hand: ${playerHand.map(c => `\`${c}\``).join(', ')}\nBot has ${botHand.length} cards.\n${botPlayMessage}`,
+          components: [],
+        });
+
+        setTimeout(playTurn, 2000);
       }
     };
 
