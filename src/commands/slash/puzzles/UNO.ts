@@ -57,6 +57,14 @@ function getValidStartingCard(deck: string[]): string {
   return card;
 }
 
+function reshuffleIfNeeded(deck: string[], discardPile: string[]): void {
+  if (deck.length === 0 && discardPile.length > 1) {
+    const top = discardPile.pop()!;
+    deck.push(...shuffleDeck(discardPile.splice(0)));
+    discardPile.push(top);
+  }
+}
+
 export default new SlashCommand({
   registerType: RegisterType.Guild,
 
@@ -83,6 +91,8 @@ export default new SlashCommand({
         await interaction.followUp({ content: '😢 Bot wins! Better luck next time.', ephemeral: true });
         return;
       }
+
+      reshuffleIfNeeded(deck, discardPile);
 
       if (isPlayerTurn) {
         const playable = playerHand.filter(c => canPlay(topCard, c));
@@ -114,6 +124,7 @@ export default new SlashCommand({
           const chosen = btnInteraction.customId.split(':')[2];
 
           if (chosen === 'Draw Card') {
+            reshuffleIfNeeded(deck, discardPile);
             const newCard = deck.shift()!;
             playerHand.push(newCard);
             await btnInteraction.update({ content: `🃏 You drew \`${newCard}\`.`, components: [] });
@@ -150,6 +161,7 @@ export default new SlashCommand({
               if (selectInt.user.id !== interaction.user.id) return;
               currentColor = selectInt.values[0];
               if (chosen.includes('Draw Four')) {
+                reshuffleIfNeeded(deck, discardPile);
                 botHand.push(...deck.splice(0, 4));
               }
               await selectInt.update({ content: `You chose **${currentColor}**. You played \`${chosen}\`.`, components: [] });
@@ -162,6 +174,7 @@ export default new SlashCommand({
           currentColor = chosen.split(' ')[0];
 
           if (chosen.includes('Draw Two')) {
+            reshuffleIfNeeded(deck, discardPile);
             botHand.push(...deck.splice(0, 2));
           }
 
@@ -182,6 +195,7 @@ export default new SlashCommand({
         let chosen: string;
         let botPlayMessage = '';
         if (playable.length === 0) {
+          reshuffleIfNeeded(deck, discardPile);
           const drawn = deck.shift()!;
           botHand.push(drawn);
           botPlayMessage = `🤖 Bot drew a card.`;
@@ -192,8 +206,14 @@ export default new SlashCommand({
           topCard = chosen;
           currentColor = chosen.includes('Wild') || chosen.includes('Draw Four') ? colours[Math.floor(Math.random() * 4)] : chosen.split(' ')[0];
 
-          if (chosen.includes('Draw Four')) playerHand.push(...deck.splice(0, 4));
-          if (chosen.includes('Draw Two')) playerHand.push(...deck.splice(0, 2));
+          if (chosen.includes('Draw Four')) {
+            reshuffleIfNeeded(deck, discardPile);
+            playerHand.push(...deck.splice(0, 4));
+          }
+          if (chosen.includes('Draw Two')) {
+            reshuffleIfNeeded(deck, discardPile);
+            playerHand.push(...deck.splice(0, 2));
+          }
 
           if (chosen.includes('Skip') || chosen.includes('Reverse')) {
             botPlayMessage = `🤖 Bot played \`${chosen}\`. Your turn skipped!`;
