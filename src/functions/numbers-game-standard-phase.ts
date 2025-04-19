@@ -174,7 +174,7 @@ async function handleLifeReduction(channel: TextChannel, gameState: GameState, w
   // Create a button collector
   const collector = channel.createMessageComponentCollector({
     componentType: ComponentType.Button,
-    time: 20000,
+    time: 300000,
     filter: (i: ButtonInteraction) => i.user.id === winner.id
   });
 

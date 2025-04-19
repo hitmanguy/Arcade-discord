@@ -75,7 +75,7 @@ async function getPlayerChoiceWithButtons(channel: TextChannel, player: Player):
   return new Promise(resolve => {
     const collector = channel.createMessageComponentCollector({
       componentType: ComponentType.Button,
-      time: 20000,
+      time: 300000,
       filter: (i: ButtonInteraction) => i.user.id === player.id && (i.customId === `choose_0_${player.id}` || i.customId === `choose_100_${player.id}`)
     });
 
