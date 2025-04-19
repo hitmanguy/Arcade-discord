@@ -7,7 +7,6 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ComponentType,
   MessageFlags
 } from 'discord.js';
 
@@ -41,42 +40,42 @@ function dealHand(count = 7): string[] {
 
 export default new SlashCommand({
   registerType: RegisterType.Guild,
+
   data: new SlashCommandBuilder()
     .setName('uno')
-    .setDescription('Start a single-player UNO match!'),
+    .setDescription('Play UNO with bot!'),
 
-  async execute(interaction: ChatInputCommandInteraction) {
-    const playerHand = dealHand();
-    const aiHand = dealHand();
-    const topCard = deck.pop()!;
+  async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    const cards = dealHand();
+    const topCard = deck.pop();
 
-    // Create embed showing game status
-    const embed = new EmbedBuilder()
+    const introEmbed = new EmbedBuilder()
       .setTitle('🎮 UNO - Your Move!')
-      .setDescription(`🃏 Top Card: **${topCard}**\n\nYour Hand:\n${playerHand.map((c) => `• ${c}`).join('\n')}`)
+      .setDescription(`🃏 Top Card: **${topCard}**\n\nYour Hand:\n${cards.map((c) => `• ${c}`).join('\n')}`)
       .setColor('Random');
 
-    // Create buttons for player's hand (max 5 per row)
     const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-    for (let i = 0; i < playerHand.length; i += 5) {
-      const slice = playerHand.slice(i, i + 5);
-      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        slice.map((card) =>
-          new ButtonBuilder()
-            .setCustomId(`uno_card_${card}`)
-            .setLabel(card)
-            .setStyle(ButtonStyle.Primary)
-        )
+
+    for (let i = 0; i < cards.length; i += 5) {
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>();
+
+      const chunk = cards.slice(i, i + 5);
+      const buttons = chunk.map((card, index) =>
+        new ButtonBuilder()
+          .setCustomId(`card_${i + index}`)
+          .setLabel(card)
+          .setStyle(ButtonStyle.Secondary)
       );
-      rows.push(row);
+
+      buttonRow.addComponents(...buttons);
+      rows.push(buttonRow);
     }
 
     await interaction.reply({
-      embeds: [embed],
+      content: '🎴 Here are your cards:',
+      embeds: [introEmbed],
       components: rows,
-      flags: [MessageFlags.Ephemeral],
+      flags: MessageFlags.Ephemeral
     });
-
-    // Ready for future: collector, move validation, AI turns
   },
 });
