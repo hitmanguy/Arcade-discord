@@ -191,12 +191,34 @@ async function botTurn(
     };
   }
 
-async function handleCardPlay(
+  async function handleCardPlay(
     interaction: ButtonInteraction,
     playerHand: string[],
     topCard: string
   ): Promise<{ newTopCard: string, updatedPlayerHand: string[] } | void> {
-    const selectedCard = interaction.customId.split('_').slice(1).join(' ');
+    // Extract just the card name, ignoring position indices
+    const customIdParts = interaction.customId.split('_');
+    let selectedCard: string;
+    
+    if (customIdParts[0] === 'card') {
+      // Format could be card_RED_1_0_2 or card_+4_0_3
+      if (customIdParts[1] === '+4') {
+        selectedCard = '+4';
+      } else if (customIdParts.length >= 3 && !isNaN(Number(customIdParts[2]))) {
+        selectedCard = customIdParts[1] + ' ' + customIdParts[2];
+      } else {
+        // For wild cards or other special cases
+        selectedCard = customIdParts[1];
+      }
+    } else {
+      return; // Not a card button
+    }
+  
+    // Check if it's a wild card
+    if (selectedCard === 'WILD' || selectedCard === '+4') {
+      return handleWildCardPlay(interaction, playerHand, selectedCard);
+    }
+    
     const cardIndex = playerHand.indexOf(selectedCard);
   
     if (cardIndex === -1) {
@@ -205,7 +227,7 @@ async function handleCardPlay(
     }
   
     if (!isValidPlay(topCard, selectedCard)) {
-      await interaction.reply({ content: '❌ You can’t throw this card!', ephemeral: true });
+      await interaction.reply({ content: '❌ You can\'t throw this card!', ephemeral: true });
       return;
     }
   
@@ -213,22 +235,21 @@ async function handleCardPlay(
     const newTopCard = selectedCard;
   
     const updatedComponents = interaction.message.components.map(row => {
-        const newRow = new ActionRowBuilder<ButtonBuilder>();
-        row.components.forEach(component => {
-          if (component.type !== ComponentType.Button) return;
-      
-          const btn = component as any; // or: const btn = component as ButtonComponent;
-      
-          const newBtn = ButtonBuilder.from(btn);
-          if (btn.customId?.includes(selectedCard)) {
-            newBtn.setDisabled(true);
-          }
-          newRow.addComponents(newBtn);
-        });
-        return newRow;
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+      row.components.forEach(component => {
+        if (component.type !== ComponentType.Button) return;
+    
+        const btn = component as any;
+    
+        const newBtn = ButtonBuilder.from(btn);
+        if (btn.customId?.includes(selectedCard)) {
+          newBtn.setDisabled(true);
+        }
+        newRow.addComponents(newBtn);
       });
-      
-  
+      return newRow;
+    });
+    
     await interaction.update({
       content: `🃏 You played: ${selectedCard}\n🤖 Bot is thinking...`,
       components: updatedComponents,
@@ -240,6 +261,52 @@ async function handleCardPlay(
     };
   }
   
+// Add this function to handle wild card color selection
+async function handleWildCardPlay(
+    interaction: ButtonInteraction,
+    playerHand: string[],
+    selectedCard: string
+  ): Promise<{ newTopCard: string, updatedPlayerHand: string[] } | void> {
+    const cardIndex = playerHand.indexOf(selectedCard);
+    
+    if (cardIndex === -1) {
+      await interaction.reply({ content: 'Card not found in your hand.', ephemeral: true });
+      return;
+    }
+    
+    // Create color selection buttons
+    const colorRow = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`wild_RED_${selectedCard}`)
+          .setLabel('RED')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`wild_BLUE_${selectedCard}`)
+          .setLabel('BLUE')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`wild_GREEN_${selectedCard}`)
+          .setLabel('GREEN')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`wild_YELLOW_${selectedCard}`)
+          .setLabel('YELLOW')
+          .setStyle(ButtonStyle.Secondary)
+      );
+    
+    // Remove the wild card from player's hand
+    playerHand.splice(cardIndex, 1);
+    
+    await interaction.update({
+      content: `You played: ${selectedCard}\nPlease select a color:`,
+      components: [colorRow],
+    });
+    
+    // The color will be selected in a separate interaction
+    return;
+  }
+
 
 export default new SlashCommand({
   registerType: RegisterType.Guild,
@@ -258,23 +325,23 @@ export default new SlashCommand({
       .setDescription(`🃏 Top Card: **${topCard}**\n\nYour Hand:\n${playerHand.map((c) => `• ${c}`).join('\n')}`)
       .setColor('Random');
 
-    const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+      const rows: ActionRowBuilder<ButtonBuilder>[] = [];
 
-    for (let i = 0; i < playerHand.length; i += 5) {
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>();
-      const chunk = playerHand.slice(i, i + 5);
-
-      const buttons = chunk.map((card) =>
-        new ButtonBuilder()
-          .setCustomId(`card_${card}`) // e.g. "card_RED 5"
-          .setLabel(card)
-          .setStyle(ButtonStyle.Secondary)
-      );
-
-      buttonRow.addComponents(...buttons);
-      rows.push(buttonRow);
-    }
-
+      for (let i = 0; i < playerHand.length; i += 5) {
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>();
+        const chunk = playerHand.slice(i, i + 5);
+      
+        chunk.forEach((card, index) => {
+          buttonRow.addComponents(
+            new ButtonBuilder()
+              .setCustomId(`card_${card}_${i}_${index}`) // Add position indices to make IDs unique
+              .setLabel(card)
+              .setStyle(ButtonStyle.Secondary)
+          );
+        });
+      
+        rows.push(buttonRow);
+      }
     const replyMessage = await interaction.reply({
       content: '🎴 Here are your cards:',
       embeds: [introEmbed],
@@ -370,77 +437,96 @@ export default new SlashCommand({
         }
       });
       
-      // Also add handling for the "Draw Card" button
       collector.on('collect', async (btn) => {
-        // Existing code...
-        
-        // Add this part to handle drawing cards
-        if (btn.customId === 'draw_card') {
-          if (deck.length === 0) {
-            await btn.reply({ content: 'No cards left to draw!', ephemeral: true });
-            return;
-          }
-          
-          const drawnCard = deck.pop()!;
-          playerHand.push(drawnCard);
+        if (btn.user.id !== interaction.user.id) {
+          return btn.reply({ content: 'This isn\'t your game!', ephemeral: true });
+        }
+      
+        // Handle wild card color selection
+        if (btn.customId.startsWith('wild_')) {
+          const [_, color, ...cardParts] = btn.customId.split('_');
+          const wildCard = cardParts.join(' ');
+          const newTopCard = `${color} ${wildCard}`;
           
           await btn.update({
-            content: `You drew: ${drawnCard}`,
-            components: [], // Remove current buttons
+            content: `🃏 You played: ${wildCard} and chose ${color} as the color`,
+            components: [],
           });
           
-          // Check if the drawn card can be played
-          const canPlay = isValidPlay(topCard, drawnCard);
+          // Now add the bot's turn
+          const botResult = await botTurn(btn, botHand, newTopCard);
+          topCard = botResult.newTopCard;
+          botHand = botResult.updatedBotHand;
           
+          // Update game status after both turns
           const gameStatusEmbed = new EmbedBuilder()
             .setTitle('🎮 UNO - Your Move!')
             .setDescription(`🃏 Top Card: **${topCard}**\n\nYour Hand:\n${playerHand.map((c) => `• ${c}`).join('\n')}\n\n🤖 Bot has ${botHand.length} cards left.`)
             .setColor('Random');
           
-          // Create new buttons for updated hand
+          // Create new button rows for the updated player hand with unique IDs
           const updatedRows: ActionRowBuilder<ButtonBuilder>[] = [];
           for (let i = 0; i < playerHand.length; i += 5) {
             const buttonRow = new ActionRowBuilder<ButtonBuilder>();
             const chunk = playerHand.slice(i, i + 5);
-        
-            const buttons = chunk.map((card) =>
-              new ButtonBuilder()
-                .setCustomId(`card_${card}`)
-                .setLabel(card)
-                .setStyle(ButtonStyle.Secondary)
-            );
-        
-            buttonRow.addComponents(...buttons);
+            
+            chunk.forEach((card, index) => {
+              const uniqueId = `card_${card}_${i}_${index}`; // Add position indices to make IDs unique
+              buttonRow.addComponents(
+                new ButtonBuilder()
+                  .setCustomId(uniqueId)
+                  .setLabel(card)
+                  .setStyle(ButtonStyle.Secondary)
+              );
+            });
+            
             updatedRows.push(buttonRow);
           }
           
+          // Add draw card button
+          if (deck.length > 0) {
+            const drawRow = new ActionRowBuilder<ButtonBuilder>()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId('draw_card')
+                  .setLabel('Draw Card')
+                  .setStyle(ButtonStyle.Primary)
+              );
+            updatedRows.push(drawRow);
+          }
+          
           await btn.followUp({
-            content: canPlay ? `You drew: ${drawnCard}. You can play this card!` : `You drew: ${drawnCard}. Your turn is skipped.`,
+            content: 'Your turn:',
             embeds: [gameStatusEmbed],
             components: updatedRows,
             ephemeral: true
           });
           
-          // If player can't play, bot takes turn
-          if (!canPlay) {
-            const botResult = await botTurn(btn, botHand, topCard);
-            topCard = botResult.newTopCard;
-            botHand = botResult.updatedBotHand;
-            
-            // Update game status after bot's turn
-            const newStatusEmbed = new EmbedBuilder()
-              .setTitle('🎮 UNO - Your Move!')
-              .setDescription(`🃏 Top Card: **${topCard}**\n\nYour Hand:\n${playerHand.map((c) => `• ${c}`).join('\n')}\n\n🤖 Bot has ${botHand.length} cards left.`)
-              .setColor('Random');
-            
+          // Check win conditions (same as in your original collector)
+          if (playerHand.length === 0) {
             await btn.followUp({
-              content: 'Your turn:',
-              embeds: [newStatusEmbed],
-              components: updatedRows,
-              ephemeral: true
+              content: '🎉 You win! The game is over.',
+              ephemeral: false
             });
+            collector.stop('game_over');
+          } else if (botHand.length === 0) {
+            await btn.followUp({
+              content: '🤖 Bot wins! The game is over.',
+              ephemeral: false
+            });
+            collector.stop('game_over');
+          } else if (deck.length === 0) {
+            await btn.followUp({
+              content: 'The deck is empty! Game ends in a draw.',
+              ephemeral: false
+            });
+            collector.stop('game_over');
           }
+          
+          return;
         }
+        
+        // Rest of your card play handling...
       });
 
     collector.on('end', () => {
