@@ -254,7 +254,7 @@ async function showTutorial(interaction: ButtonInteraction) {
   .addFields(
     { 
       name: '🏪 Shop & Items', 
-      value: 'Use `/shop` to buy items that help you survive. Manage your inventory with `/inventory`.'
+      value: 'Use `/shop` to buy items that help you survive. Manage your inventory.'
     },
     { 
       name: '📊 Core Stats', 
@@ -338,7 +338,7 @@ async function showActivities(interaction: ButtonInteraction) {
   .addFields(
     { 
       name: '📋 Basic Commands', 
-      value: '`/profile view` - View your inmate profile\n`/profile customize` - Customize your profile\n`/daily` - Daily check-in for rewards\n`/inventory` - Manage your items\n`/shop` - Buy useful items'
+      value: '`/profile view` - View your inmate profile\n`/profile customize` - Customize your profile (soon upcoming)\n`/shop` - Buy useful items'
     },
     { 
       name: '📱 Device', 
