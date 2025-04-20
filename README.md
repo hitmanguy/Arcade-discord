@@ -94,7 +94,6 @@ You’re racing against time. Crack numeric codes, predict patterns, and solve c
    - Memory Test: 100+ merit
    - Digital Card Protocol: 150+ merit
    - Numbers Protocol: 200+ merit
-   - Judas Protocol: 250+ merit
 6. Choose game mode:
    - 🧑‍🤝‍🧑 **Co-Op**: Team up, solve together, share rewards.
    - 🧨 **Sabotage**: Deceive teammates and steal merit — fail, and pay a price.
