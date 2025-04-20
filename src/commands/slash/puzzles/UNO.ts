@@ -211,6 +211,7 @@ export default new SlashCommand({
           totalGamesWon: user.totalGamesWon + 1,
           currentStreak: user.currentStreak + 1
         });
+        await UserService.updatePuzzleProgress(interaction.user.id, 'UNO', true);
         
         const winEmbed = new EmbedBuilder()
           .setColor(PRISON_COLORS.success)
@@ -238,6 +239,7 @@ export default new SlashCommand({
           totalGamesPlayed: user.totalGamesPlayed + 1,
           currentStreak: 0
         });
+        await UserService.updatePuzzleProgress(interaction.user.id, 'UNO', false);
         
         const loseEmbed = new EmbedBuilder()
           .setColor(PRISON_COLORS.danger)

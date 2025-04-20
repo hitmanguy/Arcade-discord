@@ -66,25 +66,25 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
         }
 
         // Update the progress display with proper type checking
-        if (completedPuzzles.length < requiredPuzzles.length) {
-            await interaction.reply({ 
-                embeds: [new EmbedBuilder()
-                    .setColor(getColorFromPrisonColor('danger'))
-                    .setTitle('⚠️ Access Denied')
-                    .setDescription('The Judas Protocol requires mastery of simpler trials first.')
-                    .addFields({
-                        name: 'Required Trials',
-                        value: requiredPuzzles.map(id => {
-                            const completed = user.puzzleProgress.find(p => p.puzzleId === id)?.completed;
-                            const storylineEntry = STORYLINE[id as keyof typeof STORYLINE];
-                            const name = isStorylineEntry(storylineEntry) ? storylineEntry.name : id;
-                            return `${completed ? '✅' : '❌'} ${name}`;
-                        }).join('\n')
-                    })],
-                ephemeral: true
-            });
-            return;
-        }
+        // if (completedPuzzles.length < requiredPuzzles.length) {
+        //     await interaction.reply({ 
+        //         embeds: [new EmbedBuilder()
+        //             .setColor(getColorFromPrisonColor('danger'))
+        //             .setTitle('⚠️ Access Denied')
+        //             .setDescription('The Judas Protocol requires mastery of simpler trials first.')
+        //             .addFields({
+        //                 name: 'Required Trials',
+        //                 value: requiredPuzzles.map(id => {
+        //                     const completed = user.puzzleProgress.find(p => p.puzzleId === id)?.completed;
+        //                     const storylineEntry = STORYLINE[id as keyof typeof STORYLINE];
+        //                     const name = isStorylineEntry(storylineEntry) ? storylineEntry.name : id;
+        //                     return `${completed ? '✅' : '❌'} ${name}`;
+        //                 }).join('\n')
+        //             })],
+        //         ephemeral: true
+        //     });
+        //     return;
+        // }
 
         const subcommand = interaction.options.getSubcommand();
       

@@ -8,7 +8,7 @@ import {
   MessageFlags,
   ComponentType,
 } from 'discord.js';
-import { User } from 'src/model/user_status';
+import { User } from '../../../model/user_status';
 
 export default new SlashCommand({
   registerType: RegisterType.Guild,
