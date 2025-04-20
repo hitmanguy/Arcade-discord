@@ -23,6 +23,20 @@ import { KingsOfDiamondsGame } from '../../../functions/beauty_context_game';
 import { glitchText } from '../../../constants/text_util';
 import { User } from '../../../model/user_status';
 import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
+import { UserService } from '../../../services/user_services';
+
+const GAME_REWARDS = {
+  winner: {
+    meritPoints: 50,
+    sanity: 15,
+    suspicionDecrease: 10
+  },
+  participant: {
+    meritPoints: -10,
+    sanity: -5,
+    suspicionIncrease: 5
+  }
+};
   
   // Store active games
   const activeGames = new Map<string, KingsOfDiamondsGame>();
@@ -604,18 +618,65 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     
     // Check if game is over
     if (game.isGameOver()) {
-      const gameOverEmbed = new EmbedBuilder()
-        .setColor('#FF0000')
-        .setTitle('Game Over!')
-        .setDescription(`${game.getWinner()?.name || 'No one'} wins the game!`);
+      const winner = game.getWinner();
+      const losers = game.getPlayers().filter(p => p.id !== winner?.id);
       
-      await interaction.followUp({
-        embeds: [gameOverEmbed]
-      });
-      
-      // Clean up the game
-      activeGames.delete(channelId);
-      return;
+      if (winner) {
+        // Update winner's stats
+        const winnerUser = await User.findOne({ discordId: winner.id });
+        if(winnerUser){
+          winnerUser.completedAllPuzzles = true;
+          await winnerUser.save();
+        }
+        if (winnerUser) {
+          await UserService.updateUserStats(winner.id, {
+            meritPoints: winnerUser.meritPoints + GAME_REWARDS.winner.meritPoints,
+            sanity: Math.min(winnerUser.sanity + GAME_REWARDS.winner.sanity, 100),
+            suspiciousLevel: Math.max(winnerUser.suspiciousLevel - GAME_REWARDS.winner.suspicionDecrease, 0),
+            totalGamesPlayed: winnerUser.totalGamesPlayed + 1,
+            totalGamesWon: winnerUser.totalGamesWon + 1,
+            currentStreak: winnerUser.currentStreak + 1
+          });
+        }
+    
+          // Update losers' stats
+          for (const loser of losers) {
+            const loserUser = await User.findOne({ discordId: loser.id });
+            if (loserUser) {
+              await UserService.updateUserStats(loser.id, {
+                meritPoints: Math.max(loserUser.meritPoints + GAME_REWARDS.participant.meritPoints, 0),
+                sanity: Math.max(loserUser.sanity + GAME_REWARDS.participant.sanity, 0),
+                suspiciousLevel: Math.min(loserUser.suspiciousLevel + GAME_REWARDS.participant.suspicionIncrease, 100),
+                totalGamesPlayed: loserUser.totalGamesPlayed + 1,
+                currentStreak: 0
+              });
+            }
+          }
+    
+          const gameOverEmbed = new EmbedBuilder()
+            .setColor(PRISON_COLORS.success as ColorResolvable)
+            .setTitle('👑 Game Over - King of Diamonds')
+            .setDescription(`${winner.name} has won the game!`)
+            .addFields(
+              { 
+                name: '🏆 Winner Rewards', 
+                value: `• Merit Points: +${GAME_REWARDS.winner.meritPoints}\n• Sanity: +${GAME_REWARDS.winner.sanity}\n• Suspicion: -${GAME_REWARDS.winner.suspicionDecrease}\n• Win Streak: ${winnerUser?.currentStreak ?? 1}`,
+                inline: true 
+              },
+              { 
+                name: '⚠️ Other Players', 
+                value: `• Merit Points: ${GAME_REWARDS.participant.meritPoints}\n• Sanity: ${GAME_REWARDS.participant.sanity}\n• Suspicion: +${GAME_REWARDS.participant.suspicionIncrease}\n• Streak Reset`,
+                inline: true 
+              }
+            )
+            .setFooter({ text: 'The game has concluded. Thank you for playing!' });
+            
+      await interaction.followUp({ embeds: [gameOverEmbed] });
+    }
+    
+    // Clean up the game
+    activeGames.delete(channelId);
+    return;
     }
     
     // Start the next round
