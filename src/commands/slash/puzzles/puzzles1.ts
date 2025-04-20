@@ -7,12 +7,39 @@ import {
   MessageFlags,
   ComponentType,
   EmbedBuilder,
-  AttachmentBuilder
+  AttachmentBuilder,
+  ColorResolvable
 } from 'discord.js';
 import { RegisterType, SlashCommand } from '../../../handler';
 import progressCommand from '../Progress/progress'; // adjust path if needed
 import { join } from 'path';
 import { User } from '../../../model/user_status';
+import { PRISON_COLORS } from '../../../constants/GAME_CONSTANTS';
+
+function createTimeoutEmbed(sanityLoss: number, suspicionGain: number) {
+  return new EmbedBuilder()
+    .setColor(PRISON_COLORS.danger as ColorResolvable)
+    .setTitle('⏰ Time\'s Up!')
+    .setDescription(
+      '```diff\n' +
+      '- You took too long to answer...\n' +
+      '- The silence weighs heavily on your mind\n' +
+      '```'
+    )
+    .addFields(
+      { 
+        name: '😰 Consequences', 
+        value: `• Sanity: ${sanityLoss < 0 ? '' : '-'}${sanityLoss}\n• Suspicion: +${suspicionGain}`,
+        inline: true 
+      },
+      {
+        name: '⚠️ Warning',
+        value: 'Failing to respond raises suspicion from the guards',
+        inline: true
+      }
+    )
+    .setFooter({ text: 'Moving to next puzzle in 2 seconds...' });
+}
 
 const level1Puzzles = [
   // Riddles
@@ -215,14 +242,13 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
 
   const current = session.puzzles[session.index];
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    current.options.map(opt =>
+    current.options.map((opt, index) =>
       new ButtonBuilder()
-        .setCustomId(`puzzle:answer:${opt}`)
+        .setCustomId(`puzzle:answer:${opt}:${Date.now()}:${index}`) // Add unique identifiers
         .setLabel(opt)
         .setStyle(ButtonStyle.Primary)
     )
   );
-
   // Create the attachment for the puzzle GIF from local file
   const puzzleGifPath = join(__dirname, '../../../Gifs/puzzle.gif');
   const puzzleGifAttachment = new AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
@@ -240,13 +266,14 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
     puzzleEmbed.addFields({ name: '\u200B', value: current.flavor });
   }
 
-  await interaction.editReply({
+  
+  const message = await interaction.editReply({
     embeds: [puzzleEmbed],
-    files: [puzzleGifAttachment], // Include the GIF file
+    files: [puzzleGifAttachment],
     components: [row],
   });
 
-  const collector = interaction.channel?.createMessageComponentCollector({
+  const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
     time: 30000,
     max: 1,
@@ -260,7 +287,7 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
       return btnInteraction.reply({ content: 'This is not your puzzle!', ephemeral: true });
     }
 
-    const chosen = btnInteraction.customId.split(':')[2];
+    const [, , chosen] = btnInteraction.customId.split(':');
     const isCorrect = chosen === current.answer;
 
     // Update user stats based on answer
@@ -333,6 +360,40 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
       }, 2000);
     }
   });
+  collector.on('end', async (collected) => {
+    try {
+      if (!answered && !(session.index >= 5)) {
+        const sanityLoss = -10;
+        const suspicionGain = 10;
+        
+        session.sanity += sanityLoss;
+        session.suspicion += suspicionGain;
+  
+        const timeoutEmbed = createTimeoutEmbed(sanityLoss, suspicionGain);
+  
+        await interaction.editReply({
+          embeds: [timeoutEmbed],
+          files: [],
+          components: [],
+        });
+  
+        session.index += 1;
+        setTimeout(async () => {
+          try {
+            if (session.index < 5) {
+              await sendPuzzle(interaction, userId);
+            } else {
+              await showFinalOptions(interaction, userId);
+            }
+          } catch (err) {
+            console.error('Error in timeout progression:', err);
+          }
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Error in collector end:', err);
+    }
+  });
 }
 
 async function showFinalOptions(interaction: ChatInputCommandInteraction, userId: string) {
@@ -368,28 +429,43 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
       .setStyle(ButtonStyle.Secondary)
   );
 
-  await interaction.editReply({
+  const message = await interaction.editReply({
     embeds: [embed],
-    files: [puzzleGifAttachment], // Include the GIF file
+    files: [puzzleGifAttachment],
     components: [buttonRow]
   });
 
-  // Set up collector for the buttons
-  const collector = interaction.channel?.createMessageComponentCollector({
+  const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
-    filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('puzzle:'),
-    time: 60000 // 1 minute
+    time: 60000
   });
-
   collector?.on('collect', async (btnInteraction: any) => {
+    if (btnInteraction.user.id !== interaction.user.id) {
+      await btnInteraction.reply({ 
+        content: 'This is not your game!', 
+        ephemeral: true 
+      });
+      return;
+    }
+
     const action = btnInteraction.customId.split(':')[1];
+
+    if (!btnInteraction.deferred) {
+      await btnInteraction.deferUpdate();
+    }
     
     switch (action) {
       case 'progress':
-        await btnInteraction.reply({ content: 'Use the `/progress` command to see your full progress!', ephemeral: true });
+        await btnInteraction.followUp({ 
+          content: 'Use the `/progress` command to see your full progress!', 
+          ephemeral: true 
+        });
         break;
       case 'profile':
-        await btnInteraction.reply({ content: 'Use the `/profile view` command to see your full profile!', ephemeral: true });
+        await btnInteraction.followUp({ 
+          content: 'Use the `/profile view` command to see your full profile!', 
+          ephemeral: true 
+        });
         break;
     }
   });
