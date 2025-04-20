@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type: worker
     name: infineox-bot
     env: node
     plan: free
