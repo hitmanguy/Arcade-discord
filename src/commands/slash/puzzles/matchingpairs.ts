@@ -161,13 +161,18 @@ export default new SlashCommand ({
             await interaction.editReply('You need to register first! Use `/register` to begin your journey.');
             return;
         }
+        const suspicous = user.suspiciousLevel>50;
+        if(suspicous){
+          await interaction.editReply('You are too suspicious to play this game. Try again later.');
+          return;
+        }
+            const merit = user.meritPoints;
+            if(merit<100){
+                await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
+                return;
+            }
         user.survivalDays+=1;
         await user.save();
-        // const merit = user.meritPoints;
-        // if(merit<100){
-        //     await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
-        //     return;
-        // }
         // Check for isolation or high suspicion
         if (user.isInIsolation || user.suspiciousLevel >= 80) {
             const embed = new EmbedBuilder()
