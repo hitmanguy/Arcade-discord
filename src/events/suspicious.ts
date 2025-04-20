@@ -17,9 +17,7 @@ export default new Event({
                     // Decrease by 1, but don't go below 0
                     user.suspiciousLevel = Math.max(0, user.suspiciousLevel - 1);
                     await user.save();
-                    
-                    // Optional: Log for debugging
-                    console.log(`Decreased suspicion for user ${user.discordId} to ${user.suspiciousLevel}`);
+                
                 }
             } catch (error) {
                 console.error('Error updating suspicion levels:', error);

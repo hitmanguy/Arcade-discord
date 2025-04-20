@@ -78,6 +78,7 @@ export default new SlashCommand({
 });
 
 async function showProfile(interaction: ChatInputCommandInteraction, userData: UserDocument, member?: GuildMember | null) {
+  const hasEscaped = userData.completedAllPuzzles;
   const loadingEmbed = new EmbedBuilder()
     .setColor(PRISON_COLORS.primary as ColorResolvable)
     .setTitle('🔄 Accessing Infinite Prison Database...')
@@ -95,17 +96,39 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
   }
   
   const profileEmbed = new EmbedBuilder()
-    .setColor(PRISON_COLORS.accent as ColorResolvable)
-    .setTitle(`🔒 INFINITE PRISON - INMATE #${userData.discordId.slice(-6)}`)
+  .setColor(hasEscaped ? '#FFD700' : PRISON_COLORS.accent as ColorResolvable) // Gold color for escaped inmates
+  .setTitle(`${hasEscaped ? '🌟' : '🔒'} INFINITE PRISON - INMATE #${userData.discordId.slice(-6)}`)
     .setThumbnail(member?.user.displayAvatarURL({ extension: 'png' }) || null)
     .addFields(
       { name: '👤 Identity', value: `**Name:** ${userData.username}\n**Cell:** A-01\n**Role:** Inmate`, inline: true },
       { name: '📊 Status', value: `**Days Survived:** ${userData.survivalDays}\n**Sanity:** ${userData.sanity}/100\n**Merit Points:** ${userData.meritPoints}`, inline: true },
       { name: '⚠️ Security', value: `**Suspicion Level:** ${userData.suspiciousLevel}/100\n**Isolation:** ${userData.isInIsolation ? 'Yes' : 'No'}`, inline: true },
-      { name: '🏆 Achievements', value: userData.achievements.length > 0 ? userData.achievements.join(', ') : 'None yet', inline: false }
     )
     .setFooter({ text: `Incarcerated since: ${new Date(userData.joinedAt).toLocaleDateString()}` });
   
+
+    if (hasEscaped) {
+      profileEmbed.addFields({
+        name: '🎯 Motivations',
+        value: '*"Though I\'ve found my way out, I remain in these halls. Not as a prisoner, ' +
+               'but as a guide for those still searching for their escape. The games continue, ' +
+               'but now they\'re played by choice, not necessity."*',
+        inline: false
+      });
+  
+    profileEmbed.addFields({
+      name: '🎮 Achievements',
+      value: hasEscaped 
+        ? `🏆 **Master Escapist** - Completed all puzzles\n${userData.achievements.length > 0 ? userData.achievements.join('\n') : 'Continuing to collect more...'}`
+        : (userData.achievements.length > 0 ? userData.achievements.join('\n') : 'None yet'),
+      inline: false
+    });
+    }
+    profileEmbed.setFooter({ 
+      text: hasEscaped 
+        ? `Escaped now:Originally imprisoned: ${new Date(userData.joinedAt).toLocaleDateString()}`
+        : `Incarcerated since: ${new Date(userData.joinedAt).toLocaleDateString()}`
+    });
   // Create interactive buttons
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -117,6 +140,7 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
       .setLabel('📊 Statistics')
       .setStyle(ButtonStyle.Primary),
   );
+
 
   await interaction.editReply({
     embeds: [profileEmbed],
