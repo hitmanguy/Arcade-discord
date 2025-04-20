@@ -13,7 +13,8 @@ import {
   ComponentType,
   ColorResolvable,
   GuildMember,
-  ButtonInteraction
+  ButtonInteraction,
+  MessageFlags
 } from 'discord.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { UserService } from '../../../services/user_services';
@@ -49,7 +50,7 @@ export default new SlashCommand({
     const member = interaction.guild?.members.cache.get(targetUser.id);
     const subcommand = interaction.options.getSubcommand();
     
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
     
     // Get or create user in database
     let userData = await UserService.getUserData(targetUser.id, member);

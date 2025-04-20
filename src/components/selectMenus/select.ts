@@ -1,5 +1,6 @@
 import { SelectMenu } from '../../handler';
 import type { AnySelectMenuInteraction } from 'discord.js';
+import { MessageFlags } from 'discord.js';
 
 export default new SelectMenu({
   customId: 'selectMenu',
@@ -13,6 +14,9 @@ export default new SelectMenu({
       birds: 'You chose birds! 🐦',
     };
 
-    await interaction.reply({ content: responses[choice] });
+    await interaction.reply({
+      content: responses[choice],
+      flags: [MessageFlags.Ephemeral],
+    });
   },
 });

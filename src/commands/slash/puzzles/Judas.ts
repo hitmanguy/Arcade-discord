@@ -1,3 +1,4 @@
+import { RegisterType, SlashCommand } from '../../../handler';
 import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
@@ -10,7 +11,6 @@ import {
     ButtonInteraction,
     Message,
   } from 'discord.js';
-  import { RegisterType, SlashCommand } from '../../../handler';
 import { sleep } from 'bun';
   
   const SECRETS = [

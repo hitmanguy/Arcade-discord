@@ -1,24 +1,10 @@
-// src/services/UserService.ts
 import { User, UserDocument, InventoryItem } from '../model/user_status';
 import { GuildMember } from 'discord.js';
 
 export class UserService {
-  /**
-   * Get user data from the database
-   */
   static async getUserData(discordId: string, member?: GuildMember | null): Promise<UserDocument | null> {
     try {
-      // Find existing user or create new one
       let userData = await User.findOne({ discordId });
-      
-      // if (!userData && member) {
-      //   userData = new User({
-      //     discordId,
-      //     username: member.user.username,
-      //     joinedAt: new Date()
-      //   });
-      //   await userData.save();
-      // }
       
       return userData;
     } catch (error) {
@@ -27,9 +13,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Create a new user in the database
-   */
   static async createNewUser(discordId: string, username: string): Promise<UserDocument | null> {
     try {
       // Create a new user
@@ -37,12 +20,10 @@ export class UserService {
         discordId,
         username,
         joinedAt: new Date(),
-        // Default values for new inmates
         survivalDays: 1,
         sanity: 100,
         meritPoints: 0,
         suspiciousLevel: 0,
-        // Empty arrays
         inventory: [],
         exploredRooms: [],
         achievements: []
@@ -56,9 +37,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Add items to user inventory
-   */
   static async addToInventory(
     userId: string, 
     itemId: string, 
@@ -69,14 +47,11 @@ export class UserService {
       const user = await User.findOne({ discordId: userId });
       if (!user) return false;
 
-      // Check if item already exists in inventory
       const existingItemIndex = user.inventory.findIndex(item => item.itemId === itemId);
       
       if (existingItemIndex >= 0) {
-        // Update existing item quantity
         user.inventory[existingItemIndex].quantity += quantity;
       } else {
-        // Add new item
         user.inventory.push({
           itemId,
           name,
@@ -93,16 +68,10 @@ export class UserService {
     }
   }
 
-  /**
-   * Get formatted inventory for display
-   */
   static getFormattedInventory(userData: UserDocument): string[] {
     return userData.inventory.map(item => `${item.name} (${item.quantity})`);
   }
 
-  /**
-   * Update user stats
-   */
   static async updateUserStats(
     userId: string,
     updates: Partial<UserDocument>
@@ -121,9 +90,7 @@ export class UserService {
     }
   }
 
-  /**
-   * Update daily login and increment survival days
-   */
+
   static async recordDailyLogin(userId: string): Promise<UserDocument | null> {
     try {
       const user = await User.findOneAndUpdate(
@@ -142,9 +109,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Add achievement to user profile
-   */
   static async addAchievement(
     userId: string,
     achievement: string
@@ -163,6 +127,42 @@ export class UserService {
     } catch (error) {
       console.error("Error adding achievement:", error);
       return false;
+    }
+  }
+
+  static async updatePuzzleProgress(
+    userId: string,
+    puzzleId: string,
+    completed: boolean
+  ): Promise<UserDocument | null> {
+    try {
+      const user = await User.findOne({ discordId: userId });
+      if (!user) return null;
+
+      const puzzleProgress = user.puzzleProgress.find(p => p.puzzleId === puzzleId);
+      
+      if (puzzleProgress) {
+        // Update existing puzzle progress
+        if (completed) {
+          puzzleProgress.completed = true;
+          puzzleProgress.completionCount += 1;
+        }
+        puzzleProgress.lastPlayed = new Date();
+      } else {
+        // Add new puzzle progress
+        user.puzzleProgress.push({
+          puzzleId,
+          completed,
+          completionCount: completed ? 1 : 0,
+          lastPlayed: new Date()
+        });
+      }
+
+      await user.save();
+      return user;
+    } catch (error) {
+      console.error("Error updating puzzle progress:", error);
+      return null;
     }
   }
 }

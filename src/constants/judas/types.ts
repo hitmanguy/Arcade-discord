@@ -1,3 +1,4 @@
+// Game player interface
 export interface JudasPlayer {
     id: string;
     username: string;
@@ -5,14 +6,22 @@ export interface JudasPlayer {
     revealed: boolean;
     sanity: number;
     merit: number;
+    suspiciousLevel: number;
     isAlive: boolean;
     vote?: string;
-  }
-  
-  export interface JudasGameState {
+    accusation?: string;
+    lastAction?: number;
+}
+
+// Game state interface
+export interface JudasGameState {
+    gameId: string;
     channelId: string;
     hostId: string;
     phase: 1 | 2 | 3;
+    difficulty: 'normal' | 'hard';
+    minPlayers: number;
+    maxPlayers: number;
     players: JudasPlayer[];
     judasId: string | null;
     secrets: string[];
@@ -24,4 +33,6 @@ export interface JudasPlayer {
     martyrId?: string;
     martyrUsed?: boolean;
     timer?: NodeJS.Timeout;
-  }
+    roundStartTime?: number;
+    roundDuration: number;
+}

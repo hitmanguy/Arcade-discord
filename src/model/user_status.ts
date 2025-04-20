@@ -14,6 +14,13 @@ export interface GameRecord {
   playedAt: Date;
 }
 
+interface PuzzleProgress {
+  puzzleId: string;
+  completed: boolean;
+  completionCount: number;
+  lastPlayed: Date;
+}
+
 export interface UserDocument extends Document {
   discordId: string;
   username: string;
@@ -42,6 +49,9 @@ export interface UserDocument extends Document {
   
   deviceActivated: boolean;
   lastLogin: Date;
+
+  puzzleProgress: PuzzleProgress[];
+  currentPuzzle: string;
 }
 
 const UserSchema = new Schema<UserDocument>({
@@ -83,7 +93,15 @@ const UserSchema = new Schema<UserDocument>({
   bannedUntil: { type: Date, default: null },
   
   deviceActivated: { type: Boolean, default: false },
-  lastLogin: { type: Date, default: Date.now }
+  lastLogin: { type: Date, default: Date.now },
+
+  puzzleProgress: [{
+    puzzleId: String,
+    completed: { type: Boolean, default: false },
+    completionCount: { type: Number, default: 0 },
+    lastPlayed: { type: Date }
+  }],
+  currentPuzzle: { type: String, default: 'puzzles1' }
 });
 
 export const User = model<UserDocument>("User", UserSchema);

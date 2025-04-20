@@ -9,102 +9,161 @@ import {
   EmbedBuilder,
 } from 'discord.js';
 import { RegisterType, SlashCommand } from '../../../handler';
-import progressCommand from 'src/progress'; // adjust path if needed
+import progressCommand from '../Progress/progress'; // adjust path if needed
 
 
 const level1Puzzles = [
   // Ri
   {
     type: 'riddle',
-    question: 'What has hands but can’t clap?',
+    question: "What has hands but cannot clap?",
     options: ['Clock', 'Monkey', 'Glove', 'Chair'],
     answer: 'Clock',
+    flavor: '🕰️ *The steady ticking echoes through your cell...*',
+    reward: 12,
+    sanityImpact: { success: 5, failure: -3 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'riddle_footsteps',
     type: 'riddle',
-    question: 'The more of me you take, the more you leave behind. What am I?',
+    question: "The more of me you take, the more you leave behind. What am I?",
     options: ['Time', 'Shadow', 'Footsteps', 'Silence'],
     answer: 'Footsteps',
+    flavor: '👣 *Your steps echo in the empty corridor...*',
+    reward: 15,
+    sanityImpact: { success: 5, failure: -3 },
+    image: 'https://i.imgur.com/TZz7Gdb.png'
   },
   {
+    id: 'riddle_teapot',
     type: 'riddle',
     question: 'What begins with T, ends with T, and has T in it?',
     options: ['Teapot', 'Tablet', 'Tent', 'Toilet'],
     answer: 'Teapot',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'riddle_breath',
     type: 'riddle',
     question: 'I’m light as a feather, yet the strongest man can’t hold me for more than 5 minutes. What am I?',
     options: ['Breath', 'Cloud', 'Shadow', 'Hope'],
     answer: 'Breath',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'riddle_echo',
     type: 'riddle',
     question: 'I speak without a mouth and hear without ears. I have nobody, but I come alive with the wind. What am I?',
     options: ['Echo', 'Wind', 'Whistle', 'Voice'],
     answer: 'Echo',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
-  // Trivia
   {
+    id: 'trivia_paris',
     type: 'trivia',
     question: 'What is the capital of France?',
     options: ['Paris', 'Berlin', 'London', 'Madrid'],
     answer: 'Paris',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'trivia_mars',
     type: 'trivia',
     question: 'Which planet is known as the Red Planet?',
     options: ['Mars', 'Venus', 'Jupiter', 'Saturn'],
     answer: 'Mars',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'trivia_lion',
     type: 'trivia',
     question: 'Which animal is known as the King of the Jungle?',
     options: ['Lion', 'Tiger', 'Elephant', 'Bear'],
     answer: 'Lion',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'trivia_spider',
     type: 'trivia',
     question: 'How many legs does a spider have?',
     options: ['6', '8', '10', '12'],
     answer: '8',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'trivia_pink',
     type: 'trivia',
     question: 'What color do you get when you mix red and white?',
     options: ['Pink', 'Purple', 'Orange', 'Peach'],
     answer: 'Pink',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
-  // Math
   {
+    id: 'math_19',
     type: 'math',
     question: 'What is 9 + 10?',
     options: ['19', '21', '18', '20'],
     answer: '19',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'math_32',
     type: 'math',
     question: 'What is the next number in the pattern: 2, 4, 8, 16, ?',
     options: ['20', '30', '32', '24'],
     answer: '32',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'math_50',
     type: 'math',
     question: 'What’s half of 100?',
     options: ['50', '40', '25', '60'],
     answer: '50',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'math_12',
     type: 'math',
     question: 'A dozen equals how many?',
     options: ['10', '11', '12', '13'],
     answer: '12',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
   {
+    id: 'math_5pm',
     type: 'math',
     question: 'If a train leaves at 3:00 PM and takes 2 hours to reach its destination, what time will it arrive?',
     options: ['4:00 PM', '5:00 PM', '3:30 PM', '6:00 PM'],
     answer: '5:00 PM',
+    reward: 10,
+    sanityImpact: { success: 4, failure: -2 },
+    image: 'https://i.imgur.com/8tJt6x2.png'
   },
 ];
 
@@ -282,10 +341,5 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
   });
 
   // Optionally trigger progress slash command
-  await interaction.client.application?.commands.fetch().then(commands => {
-    const progressCmd = commands.find(cmd => cmd.name === 'progress');
-    if (progressCmd) {
-      await progressCommand.execute(interaction);
-    }
-  });
+  await progressCommand.execute(interaction);
 }
