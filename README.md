@@ -1,6 +1,6 @@
-# 🧠 Prison Escape Puzzle Bot
+# 🧠 Infiniox
 
-An immersive multiplayer Discord bot where players must solve puzzles, outwit others, and escape from a mysterious high-security prison. Designed for both solo and team play, this game blends logical puzzles with psychological strategy in a thrilling escape experience.
+This Discord bot is a multiplayer puzzle game set in a prison escape theme, blending strategy, risk, and teamwork. Players solve challenges, earn merit, manage sanity, and engage in co-op, sabotage, or competitive modes. With ranking tiers and a suspicion system, every choice has consequences. Ideal for interactive Discord communities, it's perfect for gamers, friends, or roleplay groups who enjoy brain teasers, competition, and high-stakes gameplay. A thrilling, immersive experience for puzzle lovers and strategic thinkers alike.
 
 ---
 
@@ -108,9 +108,9 @@ GUILD_ID=your_test_guild_id (for local testing)
 
 ## 👨‍💻 Contributors
 
-- **Sahil Chauhan** — Core Developer, Puzzle Systems
-- **Saarthak Singh** — Multiplayer & Game Mechanics
-- **Shashank Pai** — Prediction AI & Risk Systems
+- **Sahil Chauhan** — IMT2024090
+- **Saarthak Singh** — IMT2024082
+- **Shashank Pai** — BT2024250
 
 ---
 
