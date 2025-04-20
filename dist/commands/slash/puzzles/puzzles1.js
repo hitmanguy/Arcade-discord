@@ -385,7 +385,7 @@ async function showFinalOptions(interaction, userId) {
             totalGamesWon: user.totalGamesWon + 1,
             currentStreak: user.currentStreak + 1
         }),
-        user_services_1.UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', true)
+        user_services_1.UserService.updatePuzzleProgress(interaction.user.id, 'puzzle1', true)
     ]);
     const message = await interaction.editReply({
         embeds: [embed],

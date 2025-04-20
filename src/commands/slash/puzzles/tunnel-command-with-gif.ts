@@ -104,7 +104,7 @@ export default new SlashCommand({
         }
         const suspicous = user.suspiciousLevel>50;
         const merit = user.meritPoints;
-        if(merit<150){
+        if(merit<50){
               await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
               return;
           }
