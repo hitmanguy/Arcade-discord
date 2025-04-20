@@ -106,7 +106,7 @@ export default new SlashCommand({
     // 3. Enter chat mode
     const chatEmbed = new EmbedBuilder()
       .setColor('#232946')
-      .setTitle(`💬 Chatting with ${selectedContact.emoji} ${selectedContact.name}`)
+      .setTitle("💬 Chatting with ${selectedContact.emoji} ${selectedContact.name}")
       .setDescription('Type your message below. Click "End Chat" to finish.')
       .setFooter({ text: 'Your messages are encrypted... probably.' });
 
@@ -180,10 +180,10 @@ export default new SlashCommand({
           dms = (await character).createDM();
           device.conversation_id = (await dms).chatId;
           await device.save();
-          response = (await dms).sendMessage(`${msg.author.username}-${msg.content}`);
+          response = (await dms).sendMessage("${msg.author.username}-${msg.content}");
         }else{
           dms = await (await character).DM(device.conversation_id);
-          response = (await dms).sendMessage(`${msg.author.username}-${msg.content}`);
+          response = (await dms).sendMessage("${msg.author.username}-${msg.content}");
         }
         console.log((await response).content);
         if ('sendTyping' in msg.channel && typeof msg.channel.sendTyping === 'function') {
@@ -193,7 +193,7 @@ export default new SlashCommand({
         bot_type = false;
       })
       // await msg.reply({
-      //   content: `*${selectedContact.name} is typing...*`,
+      //   content: ⁠ *${selectedContact.name} is typing...* ⁠,
       //   allowedMentions: { repliedUser: false }
       // });
     });
