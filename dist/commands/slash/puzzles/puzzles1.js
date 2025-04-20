@@ -1,62 +1,422 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const handler_1 = require("../../../handler");
 const discord_js_1 = require("discord.js");
-function generateGuardPuzzle() {
-    const intervals = [75, 80, 90, 70];
-    const interval = intervals[Math.floor(Math.random() * intervals.length)];
-    const startTime = new Date();
-    startTime.setHours(2, 30, 0);
-    const patrols = [];
-    for (let i = 0; i < 3; i++) {
-        const time = new Date(startTime.getTime() + interval * i * 60000);
-        patrols.push(time.toTimeString().substring(0, 5));
-    }
-    const nextTime = new Date(startTime.getTime() + interval * 3 * 60000);
-    const correctAnswer = nextTime.toTimeString().substring(0, 5);
-    const distractors = [
-        new Date(nextTime.getTime() + 10 * 60000).toTimeString().substring(0, 5),
-        new Date(nextTime.getTime() - 10 * 60000).toTimeString().substring(0, 5),
-        new Date(nextTime.getTime() + 20 * 60000).toTimeString().substring(0, 5),
-    ];
-    const options = [correctAnswer, ...distractors].sort(() => Math.random() - 0.5);
-    const question = `🧩 The guard patrols at regular intervals.\nThe last 3 patrols were at: **${patrols.join(', ')}**.\n\n⏰ What time will he patrol next?`;
-    return { question, options, correctAnswer };
+const handler_1 = require("../../../handler");
+const path_1 = require("path");
+const user_status_1 = require("../../../model/user_status");
+const GAME_CONSTANTS_1 = require("../../../constants/GAME_CONSTANTS");
+const user_services_1 = require("../../../services/user_services");
+function createTimeoutEmbed(sanityLoss, suspicionGain) {
+    return new discord_js_1.EmbedBuilder()
+        .setColor(GAME_CONSTANTS_1.PRISON_COLORS.danger)
+        .setTitle('⏰ Time\'s Up!')
+        .setDescription('```diff\n' +
+        '- You took too long to answer...\n' +
+        '- The silence weighs heavily on your mind\n' +
+        '```')
+        .addFields({
+        name: '😰 Consequences',
+        value: `• Sanity: ${sanityLoss < 0 ? '' : '-'}${sanityLoss}\n• Suspicion: +${suspicionGain}`,
+        inline: true
+    }, {
+        name: '⚠️ Warning',
+        value: 'Failing to respond raises suspicion from the guards',
+        inline: true
+    })
+        .setFooter({ text: 'Moving to next puzzle in 2 seconds...' });
+}
+const level1Puzzles = [
+    {
+        type: 'riddle',
+        question: "What has hands but cannot clap?",
+        options: ['Clock', 'Monkey', 'Glove', 'Chair'],
+        answer: 'Clock',
+        flavor: '🕰️ *The steady ticking echoes through your cell...*',
+        reward: 12,
+        sanityImpact: { success: 5, failure: -3 }
+    },
+    {
+        id: 'riddle_footsteps',
+        type: 'riddle',
+        question: "The more of me you take, the more you leave behind. What am I?",
+        options: ['Time', 'Shadow', 'Footsteps', 'Silence'],
+        answer: 'Footsteps',
+        flavor: '👣 *Your steps echo in the empty corridor...*',
+        reward: 15,
+        sanityImpact: { success: 5, failure: -3 }
+    },
+    {
+        id: 'riddle_teapot',
+        type: 'riddle',
+        question: 'What begins with T, ends with T, and has T in it?',
+        options: ['Teapot', 'Tablet', 'Tent', 'Toilet'],
+        answer: 'Teapot',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'riddle_breath',
+        type: 'riddle',
+        question: "I'm light as a feather, yet the strongest man can't hold me for more than 5 minutes. What am I?",
+        options: ['Breath', 'Cloud', 'Shadow', 'Hope'],
+        answer: 'Breath',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'riddle_echo',
+        type: 'riddle',
+        question: 'I speak without a mouth and hear without ears. I have nobody, but I come alive with the wind. What am I?',
+        options: ['Echo', 'Wind', 'Whistle', 'Voice'],
+        answer: 'Echo',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'trivia_paris',
+        type: 'trivia',
+        question: 'What is the capital of France?',
+        options: ['Paris', 'Berlin', 'London', 'Madrid'],
+        answer: 'Paris',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'trivia_mars',
+        type: 'trivia',
+        question: 'Which planet is known as the Red Planet?',
+        options: ['Mars', 'Venus', 'Jupiter', 'Saturn'],
+        answer: 'Mars',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'trivia_lion',
+        type: 'trivia',
+        question: 'Which animal is known as the King of the Jungle?',
+        options: ['Lion', 'Tiger', 'Elephant', 'Bear'],
+        answer: 'Lion',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'trivia_spider',
+        type: 'trivia',
+        question: 'How many legs does a spider have?',
+        options: ['6', '8', '10', '12'],
+        answer: '8',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'trivia_pink',
+        type: 'trivia',
+        question: 'What color do you get when you mix red and white?',
+        options: ['Pink', 'Purple', 'Orange', 'Peach'],
+        answer: 'Pink',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'math_19',
+        type: 'math',
+        question: 'What is 9 + 10?',
+        options: ['19', '21', '18', '20'],
+        answer: '19',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'math_32',
+        type: 'math',
+        question: 'What is the next number in the pattern: 2, 4, 8, 16, ?',
+        options: ['20', '30', '32', '24'],
+        answer: '32',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'math_50',
+        type: 'math',
+        question: "What's half of 100?",
+        options: ['50', '40', '25', '60'],
+        answer: '50',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'math_12',
+        type: 'math',
+        question: 'A dozen equals how many?',
+        options: ['10', '11', '12', '13'],
+        answer: '12',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+    {
+        id: 'math_5pm',
+        type: 'math',
+        question: 'If a train leaves at 3:00 PM and takes 2 hours to reach its destination, what time will it arrive?',
+        options: ['4:00 PM', '5:00 PM', '3:30 PM', '6:00 PM'],
+        answer: '5:00 PM',
+        reward: 10,
+        sanityImpact: { success: 4, failure: -2 }
+    },
+];
+const userProgressMap = new Map();
+function getRandomPuzzles(n) {
+    const shuffled = [...level1Puzzles].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, n);
 }
 exports.default = new handler_1.SlashCommand({
     registerType: handler_1.RegisterType.Guild,
     data: new discord_js_1.SlashCommandBuilder()
         .setName('puzzle')
-        .setDescription('Solve a tricky prison logic puzzle!'),
+        .setDescription('Solve a sequence of level 1 puzzles!'),
     async execute(interaction) {
-        const { question, options, correctAnswer } = generateGuardPuzzle();
-        const row = new discord_js_1.ActionRowBuilder().addComponents(options.map((opt) => new discord_js_1.ButtonBuilder()
-            .setCustomId(`puzzle:answer:${opt}`)
-            .setLabel(opt)
-            .setStyle(discord_js_1.ButtonStyle.Primary)));
-        await interaction.reply({
-            content: question,
-            components: [row],
-            flags: [discord_js_1.MessageFlags.Ephemeral],
-        });
-        const collector = interaction.channel?.createMessageComponentCollector({
-            componentType: discord_js_1.ComponentType.Button,
-            time: 15000,
-            max: 1,
-        });
-        collector?.on('collect', async (btnInteraction) => {
-            if (btnInteraction.user.id !== interaction.user.id) {
-                return btnInteraction.reply({ content: 'This is not your puzzle!', ephemeral: true });
-            }
-            const chosen = btnInteraction.customId.split(':')[2];
-            const isCorrect = chosen === correctAnswer;
-            await btnInteraction.update({
-                content: isCorrect
-                    ? `✅ Correct! The guard's next patrol is at **${correctAnswer}**.\n🎉 +10 Merit | 🧠 +1 Hint`
-                    : `❌ Wrong! The correct time was **${correctAnswer}**.\n🔻 -5 Sanity | ⚠️ +5 Suspicion`,
-                components: [],
+        const user = await user_status_1.User.findOne({ discordId: interaction.user.id });
+        if (!user) {
+            await interaction.reply({
+                content: 'You need to register first! Use `/register` to begin your journey.',
+                flags: [discord_js_1.MessageFlags.Ephemeral]
             });
+            return;
+        }
+        const suspicous = user.suspiciousLevel > 50;
+        if (suspicous) {
+            await interaction.reply('You are too suspicious to play this game. Try again later.');
+            return;
+        }
+        user.survivalDays += 1;
+        await user.save();
+        const userId = interaction.user.id;
+        const puzzles = getRandomPuzzles(5);
+        await interaction.deferReply({ flags: [discord_js_1.MessageFlags.Ephemeral] });
+        userProgressMap.set(userId, {
+            index: 0,
+            puzzles,
+            merit: 0,
+            hint: 0,
+            sanity: 0,
+            suspicion: 0,
         });
+        await sendPuzzle(interaction, userId);
     },
 });
+async function sendPuzzle(interaction, userId) {
+    const session = userProgressMap.get(userId);
+    if (!session)
+        return;
+    const current = session.puzzles[session.index];
+    const row = new discord_js_1.ActionRowBuilder().addComponents(current.options.map((opt, index) => new discord_js_1.ButtonBuilder()
+        .setCustomId(`puzzle:answer:${opt}:${Date.now()}:${index}`)
+        .setLabel(opt)
+        .setStyle(discord_js_1.ButtonStyle.Primary)));
+    const puzzleGifPath = (0, path_1.join)(__dirname, '../../../Gifs/puzzle.gif');
+    const puzzleGifAttachment = new discord_js_1.AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+    const puzzleEmbed = new discord_js_1.EmbedBuilder()
+        .setColor('#0099ff')
+        .setTitle(`🧠 ${current.type.toUpperCase()} PUZZLE`)
+        .setDescription(current.question)
+        .setImage('attachment://puzzle.gif')
+        .setFooter({ text: `Puzzle ${session.index + 1}/5` });
+    if (current.flavor) {
+        puzzleEmbed.addFields({ name: '\u200B', value: current.flavor });
+    }
+    const message = await interaction.editReply({
+        embeds: [puzzleEmbed],
+        files: [puzzleGifAttachment],
+        components: [row],
+    });
+    const collector = message.createMessageComponentCollector({
+        componentType: discord_js_1.ComponentType.Button,
+        time: 30000,
+        max: 1,
+    });
+    let answered = false;
+    collector?.on('collect', async (btnInteraction) => {
+        answered = true;
+        if (btnInteraction.user.id !== interaction.user.id) {
+            return btnInteraction.reply({ content: 'This is not your puzzle!', ephemeral: true });
+        }
+        const [, , chosen] = btnInteraction.customId.split(':');
+        const isCorrect = chosen === current.answer;
+        if (isCorrect) {
+            session.merit += current.reward;
+            session.hint += 1;
+            if (current.sanityImpact?.success) {
+                session.sanity += current.sanityImpact.success;
+            }
+        }
+        else {
+            if (current.sanityImpact?.failure) {
+                session.sanity += current.sanityImpact.failure;
+            }
+            session.suspicion += 5;
+        }
+        const resultEmbed = new discord_js_1.EmbedBuilder()
+            .setColor(isCorrect ? '#00ff00' : '#ff0000')
+            .setTitle(isCorrect ? '✅ CORRECT!' : '❌ INCORRECT!')
+            .setDescription(isCorrect
+            ? `**${current.answer}** was the right answer.\n\n🎉 +${current.reward} Merit | 🧠 +1 Hint${current.sanityImpact?.success ? ` | 😌 +${current.sanityImpact.success} Sanity` : ''}`
+            : `The correct answer was **${current.answer}**.\n\n${current.sanityImpact?.failure ? `🔻 ${current.sanityImpact.failure} Sanity | ` : ''}⚠️ +5 Suspicion`);
+        await btnInteraction.update({
+            embeds: [resultEmbed],
+            files: [],
+            components: [],
+        });
+        session.index += 1;
+        setTimeout(async () => {
+            if (session.index < 5) {
+                await sendPuzzle(interaction, userId);
+            }
+            else {
+                await showFinalOptions(interaction, userId);
+            }
+        }, 2000);
+    });
+    collector?.on('end', async (collected) => {
+        if (!answered) {
+            session.sanity -= 10;
+            session.suspicion += 10;
+            const timeoutEmbed = new discord_js_1.EmbedBuilder()
+                .setColor('#ff0000')
+                .setTitle('⏰ You took too long!')
+                .setDescription('You failed to answer in time.\n\n🔻 -10 Sanity | ⚠️ +10 Suspicion');
+            try {
+                await interaction.editReply({
+                    embeds: [timeoutEmbed],
+                    files: [],
+                    components: [],
+                });
+            }
+            catch (error) {
+                console.error('Failed to show timeout penalty:', error);
+            }
+            session.index += 1;
+            setTimeout(async () => {
+                if (session.index < 5) {
+                    await sendPuzzle(interaction, userId);
+                }
+                else {
+                    await showFinalOptions(interaction, userId);
+                }
+            }, 2000);
+        }
+    });
+    collector.on('end', async (collected) => {
+        try {
+            if (!answered && !(session.index >= 5)) {
+                const sanityLoss = -10;
+                const suspicionGain = 10;
+                session.sanity += sanityLoss;
+                session.suspicion += suspicionGain;
+                const timeoutEmbed = createTimeoutEmbed(sanityLoss, suspicionGain);
+                await interaction.editReply({
+                    embeds: [timeoutEmbed],
+                    files: [],
+                    components: [],
+                });
+                session.index += 1;
+                setTimeout(async () => {
+                    try {
+                        if (session.index < 5) {
+                            await sendPuzzle(interaction, userId);
+                        }
+                        else {
+                            await showFinalOptions(interaction, userId);
+                        }
+                    }
+                    catch (err) {
+                        console.error('Error in timeout progression:', err);
+                    }
+                }, 2000);
+            }
+        }
+        catch (err) {
+            console.error('Error in collector end:', err);
+        }
+    });
+}
+async function showFinalOptions(interaction, userId) {
+    const session = userProgressMap.get(userId);
+    if (!session)
+        return;
+    const user = await user_status_1.User.findOne({ discordId: interaction.user.id });
+    if (!user)
+        return;
+    const puzzleGifPath = (0, path_1.join)(__dirname, '../../../Gifs/puzzle.gif');
+    const puzzleGifAttachment = new discord_js_1.AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+    const embed = new discord_js_1.EmbedBuilder()
+        .setTitle('🧩 Puzzle Report')
+        .setDescription(`You've completed Level 1 puzzles!`)
+        .setImage('attachment://puzzle.gif')
+        .addFields({ name: '💰 Merit Points', value: session.merit.toString(), inline: true }, { name: '🧠 Sanity', value: session.sanity.toString(), inline: true }, { name: '👁️ Suspicion', value: session.suspicion.toString(), inline: true })
+        .setColor('Blue')
+        .setFooter({ text: 'Return tomorrow for more puzzles!' });
+    const buttonRow = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
+        .setCustomId('puzzle:progress')
+        .setLabel('📊 View Progress')
+        .setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder()
+        .setCustomId('puzzle:profile')
+        .setLabel('👤 View Profile')
+        .setStyle(discord_js_1.ButtonStyle.Secondary));
+    await Promise.all([
+        user_services_1.UserService.updateUserStats(interaction.user.id, {
+            meritPoints: user.meritPoints + session.merit,
+            sanity: Math.min(Math.max(user.sanity + 0.5 * (session.sanity), 0), 100),
+            suspiciousLevel: Math.min(user.suspiciousLevel + session.suspicion, 100),
+            totalGamesPlayed: user.totalGamesPlayed + 1,
+            totalGamesWon: user.totalGamesWon + 1,
+            currentStreak: user.currentStreak + 1
+        }),
+        user_services_1.UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', true)
+    ]);
+    const message = await interaction.editReply({
+        embeds: [embed],
+        files: [puzzleGifAttachment],
+        components: [buttonRow]
+    });
+    const collector = message.createMessageComponentCollector({
+        componentType: discord_js_1.ComponentType.Button,
+        time: 60000
+    });
+    collector?.on('collect', async (btnInteraction) => {
+        if (btnInteraction.user.id !== interaction.user.id) {
+            await btnInteraction.reply({
+                content: 'This is not your game!',
+                ephemeral: true
+            });
+            return;
+        }
+        const action = btnInteraction.customId.split(':')[1];
+        if (!btnInteraction.deferred) {
+            await btnInteraction.deferUpdate();
+        }
+        switch (action) {
+            case 'progress':
+                await btnInteraction.followUp({
+                    content: 'Use the `/progress` command to see your full progress!',
+                    ephemeral: true
+                });
+                break;
+            case 'profile':
+                await btnInteraction.followUp({
+                    content: 'Use the `/profile view` command to see your full profile!',
+                    ephemeral: true
+                });
+                break;
+        }
+    });
+    collector?.on('end', async () => {
+        try {
+            await interaction.editReply({
+                components: []
+            });
+        }
+        catch (error) {
+            console.error('Failed to remove components:', error);
+        }
+    });
+}
 //# sourceMappingURL=puzzles1.js.map

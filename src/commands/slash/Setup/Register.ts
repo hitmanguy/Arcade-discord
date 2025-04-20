@@ -33,7 +33,12 @@ export default new SlashCommand({
     ) as SlashCommandBuilder,
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+    try {
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+    } catch (error) {
+      console.error('Failed to defer reply:', error);
+      return;
+    }
     
     const member = interaction.member;
     if (!member) {
@@ -142,33 +147,50 @@ export default new SlashCommand({
       filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('register:'),
       time: 300000 // 5 minutes
     });
-    
-    collector?.on('collect', async (i: ButtonInteraction) => {
-      const action = i.customId.split(':')[1];
-      
-      switch (action) {
-        case 'tutorial':
-          await showTutorial(i);
-          break;
-        case 'profile':
-          await i.reply({ content: 'Use the `/profile view` command to see your full profile!', ephemeral: true });
-          break;
-        case 'activities':
-          await showActivities(i);
-          break;
-      }
-    });
-    
-    collector?.on('end', async () => {
+
+    if (!collector) {
+      console.error('Failed to create collector');
+      return;
+    }
+
+    collector.on('collect', async (i: ButtonInteraction) => {
       try {
-        await interaction.editReply({
-          components: [] // Remove all components
-        });
+        const action = i.customId.split(':')[1];
+        
+        switch (action) {
+          case 'tutorial':
+            await showTutorial(i).catch(error => {
+              console.error('Tutorial error:', error);
+              safeReply(i, '❌ Failed to show tutorial. Please try again.');
+            });
+            break;
+          case 'profile':
+            await safeReply(i, 'Use the `/profile view` command to see your full profile!', true);
+            break;
+          case 'activities':
+            await showActivities(i).catch(error => {
+              console.error('Activities error:', error);
+              safeReply(i, '❌ Failed to show activities. Please try again.');
+            });
+            break;
+        }
       } catch (error) {
-        console.error('Failed to remove components:', error);
+        console.error('Collector error:', error);
+        safeReply(i, '❌ Something went wrong. Please try again.');
       }
     });
-    
+
+    collector.on('end', async () => {
+      try {
+        const message = await interaction.fetchReply();
+        if (message) {
+          await interaction.editReply({ components: [] });
+        }
+      } catch (error) {
+        console.error('Failed to cleanup components:', error);
+      }
+    });
+
     await sleep(60000);
 
     try {
@@ -240,179 +262,232 @@ async function createWelcomeEmbed(userId: string, crime: string, userAvatar: str
 }
 
 async function showTutorial(interaction: ButtonInteraction) {
-  const tutorialEmbed = new EmbedBuilder()
-  .setColor(PRISON_COLORS.info as ColorResolvable)
-  .setTitle('📖 HOW TO SURVIVE IN THE INFINITE PRISON')
-  .setDescription(
-    'Survival in the Infinite Prison is a daily challenge. To make it, you must:\n\n' +
-    '• **Play Escape Games:** Use `/puzzle`, `/tunnel`, `/uno`, `/matching`, and `/number-game` to progress your escape and unlock new areas.\n' +
-    '• **Manage Your Stats:** Keep your **Sanity** high, **Suspicion** low, and earn **Merit Points** to buy items from the `/shop`.\n' +
-    '• **Use Your Device:** Soon, you\'ll receive a `/device` to communicate with other inmates and uncover secrets.\n' +
-    '• **Balance Your Routine:** Daily check-ins, activities, and smart choices are key. High suspicion leads to isolation. Low sanity brings hallucinations. Merit points are your lifeline.\n\n' +
-    'Explore, strategize, and survive. Only the cleverest inmates will discover the secrets of the Infinite Prison.'
-  )
-  .addFields(
-    { 
-      name: '🏪 Shop & Items', 
-      value: 'Use `/shop` to buy items that help you survive. Manage your inventory.'
-    },
-    { 
-      name: '📊 Core Stats', 
-      value: '• **Survival Days**: How long you\'ve lasted\n• **Sanity**: Mental health (0-100)\n• **Merit Points**: Currency for purchases\n• **Suspicion Level**: How closely guards watch you'
-    }
-  )
-  .setFooter({ text: 'Remember: The walls have eyes. Your choices matter.' });
-  
-  const backButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId('tutorial:back')
-      .setLabel('⬅️ Back')
-      .setStyle(ButtonStyle.Secondary)
-  );
-  
-  await interaction.update({
-    embeds: [tutorialEmbed],
-    components: [backButton]
-  });
-  
-  // Set up collector for the back button
-  const collector = interaction.channel?.createMessageComponentCollector({
-    componentType: ComponentType.Button,
-    filter: (i) => i.user.id === interaction.user.id && i.customId === 'tutorial:back',
-    time: 60000
-  });
-  
-  collector?.on('collect', async (i: ButtonInteraction) => {
-    await i.deferUpdate();
+  try {
+    const tutorialEmbed = new EmbedBuilder()
+    .setColor(PRISON_COLORS.info as ColorResolvable)
+    .setTitle('📖 HOW TO SURVIVE IN THE INFINITE PRISON')
+    .setDescription(
+      'Survival in the Infinite Prison is a daily challenge. To make it, you must:\n\n' +
+      '• **Play Escape Games:** Use `/puzzle`, `/tunnel`, `/uno`, `/matching`, and `/number-game` to progress your escape and unlock new areas.\n' +
+      '• **Manage Your Stats:** Keep your **Sanity** high, **Suspicion** low, and earn **Merit Points** to buy items from the `/shop`.\n' +
+      '• **Use Your Device:** Soon, you\'ll receive a `/device` to communicate with other inmates and uncover secrets.\n' +
+      '• **Balance Your Routine:** Daily check-ins, activities, and smart choices are key. High suspicion leads to isolation. Low sanity brings hallucinations. Merit points are your lifeline.\n\n' +
+      'Explore, strategize, and survive. Only the cleverest inmates will discover the secrets of the Infinite Prison.'
+    )
+    .addFields(
+      { 
+        name: '🏪 Shop & Items', 
+        value: 'Use `/shop` to buy items that help you survive. Manage your inventory.'
+      },
+      { 
+        name: '📊 Core Stats', 
+        value: '• **Survival Days**: How long you\'ve lasted\n• **Sanity**: Mental health (0-100)\n• **Merit Points**: Currency for purchases\n• **Suspicion Level**: How closely guards watch you'
+      }
+    )
+    .setFooter({ text: 'Remember: The walls have eyes. Your choices matter.' });
     
-    // Need to include the welcome GIF again when going back
-    const welcomeGifPath = join(__dirname, '../../../Gifs/welcome.gif');
-    const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
-        
-    const welcomeEmbed = await createWelcomeEmbed(
-      interaction.user.id,
-      interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity",
-      interaction.user.displayAvatarURL()
+    const backButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('tutorial:back')
+        .setLabel('⬅️ Back')
+        .setStyle(ButtonStyle.Secondary)
     );
     
-    // Recreate the original welcome message buttons
-    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId('register:tutorial')
-        .setLabel('📖 View Tutorial')
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId('register:profile')
-        .setLabel('👤 View Profile')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId('register:activities')
-        .setLabel('🎯 Available Activities')
-        .setStyle(ButtonStyle.Success)
-    );
-    
-    await i.editReply({
-      content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
-      embeds: [welcomeEmbed],
-      files: [welcomeGifAttachment], // Include the GIF file
-      components: [buttonRow]
+    await safeUpdate(interaction, {
+      embeds: [tutorialEmbed],
+      components: [backButton]
     });
-  });
-  
-  collector?.on('end', async () => {
-    try {
-      await interaction.editReply({
-        components: [] // Remove all components
-      });
-    } catch (error) {
-      console.error('Failed to remove components:', error);
+    
+    // Set up collector for the back button
+    const collector = interaction.channel?.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      filter: (i) => i.user.id === interaction.user.id && i.customId === 'tutorial:back',
+      time: 60000
+    });
+    
+    if (!collector) {
+      throw new Error('Failed to create back collector');
     }
-  });
+
+    collector?.on('collect', async (i: ButtonInteraction) => {
+      try {
+        await i.deferUpdate();
+        
+        // Need to include the welcome GIF again when going back
+        const welcomeGifPath = join(__dirname, '../../../Gifs/welcome.gif');
+        const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+            
+        const welcomeEmbed = await createWelcomeEmbed(
+          interaction.user.id,
+          interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity",
+          interaction.user.displayAvatarURL()
+        );
+        
+        // Recreate the original welcome message buttons
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId('register:tutorial')
+            .setLabel('📖 View Tutorial')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId('register:profile')
+            .setLabel('👤 View Profile')
+            .setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder()
+            .setCustomId('register:activities')
+            .setLabel('🎯 Available Activities')
+            .setStyle(ButtonStyle.Success)
+        );
+        
+        await i.editReply({
+          content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
+          embeds: [welcomeEmbed],
+          files: [welcomeGifAttachment], // Include the GIF file
+          components: [buttonRow]
+        });
+      } catch (error) {
+        console.error('Back button error:', error);
+        safeReply(i, '❌ Failed to go back. Please try again.');
+      }
+    });
+    
+    collector?.on('end', async () => {
+      try {
+        if (interaction.message.deletable) {
+          await interaction.editReply({ components: [] });
+        }
+      } catch (error) {
+        console.error('Failed to cleanup tutorial:', error);
+      }
+    });
+  } catch (error) {
+    console.error('Tutorial function error:', error);
+    throw error; // Re-throw for handling in collector
+  }
 }
 
 async function showActivities(interaction: ButtonInteraction) {
-  const activitiesEmbed = new EmbedBuilder()
-  .setColor(PRISON_COLORS.success as ColorResolvable)
-  .setTitle('🎯 AVAILABLE ACTIVITIES')
-  .setDescription('Commands and features you can use in the Infinite Prison:')
-  .addFields(
-    { 
-      name: '📋 Basic Commands', 
-      value: '`/profile view` - View your inmate profile\n`/profile customize` - Customize your profile (soon upcoming)\n`/shop` - Buy useful items'
-    },
-    { 
-      name: '📱 Device', 
-      value: '`/device` *(provided to you soon)* - Access your mysterious prison device. Use it to talk to other inmates and uncover secrets.'
-    },
-    { 
-      name: '🕹️ Escape Games', 
-      value: '`/puzzle`, `/tunnel`, `/uno`, `/matching`, `/number-game` - Play games to progress your escape attempts and survive the prison.'
-    }
-  )
-  .setFooter({ text: 'New activities unlock as you progress and explore more of the prison.' });
+  try {
+    const activitiesEmbed = new EmbedBuilder()
+    .setColor(PRISON_COLORS.success as ColorResolvable)
+    .setTitle('🎯 AVAILABLE ACTIVITIES')
+    .setDescription('Commands and features you can use in the Infinite Prison:')
+    .addFields(
+      { 
+        name: '📋 Basic Commands', 
+        value: '`/profile view` - View your inmate profile\n`/profile customize` - Customize your profile (soon upcoming)\n`/shop` - Buy useful items'
+      },
+      { 
+        name: '📱 Device', 
+        value: '`/device` *(provided to you soon)* - Access your mysterious prison device. Use it to talk to other inmates and uncover secrets.'
+      },
+      { 
+        name: '🕹️ Escape Games', 
+        value: '`/puzzle`, `/tunnel`, `/uno`, `/matching`, `/number-game` - Play games to progress your escape attempts and survive the prison.'
+      }
+    )
+    .setFooter({ text: 'New activities unlock as you progress and explore more of the prison.' });
 
-const backButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
-  new ButtonBuilder()
-    .setCustomId('activities:back')
-    .setLabel('⬅️ Back')
-    .setStyle(ButtonStyle.Secondary)
-);
+    const backButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('activities:back')
+        .setLabel('⬅️ Back')
+        .setStyle(ButtonStyle.Secondary)
+    );
 
-await interaction.update({
-  embeds: [activitiesEmbed],
-  components: [backButton]
-});
-  
-  // Set up collector for the back button
-  const collector = interaction.channel?.createMessageComponentCollector({
-    componentType: ComponentType.Button,
-    filter: (i) => i.user.id === interaction.user.id && i.customId === 'activities:back',
-    time: 60000
-  });
-  
-  collector?.on('collect', async (i: ButtonInteraction) => {
-    await i.deferUpdate();
-    
-    // Need to include the welcome GIF again when going back
-    const welcomeGifPath = join(__dirname, '../../../Gifs/welcome.gif');
-    const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
-        
-    const welcomeEmbed = await createWelcomeEmbed(
-      interaction.user.id,
-      interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity",
-      interaction.user.displayAvatarURL()
-    );
-    
-    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId('register:tutorial')
-        .setLabel('📖 View Tutorial')
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId('register:profile')
-        .setLabel('👤 View Profile')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId('register:activities')
-        .setLabel('🎯 Available Activities')
-        .setStyle(ButtonStyle.Success)
-    );
-    
-    await i.editReply({
-      content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
-      embeds: [welcomeEmbed],
-      files: [welcomeGifAttachment], // Include the GIF file
-      components: [buttonRow]
+    await safeUpdate(interaction, {
+      embeds: [activitiesEmbed],
+      components: [backButton]
     });
-  });
-  
-  collector?.on('end', async () => {
-    try {
-      await interaction.editReply({
-        components: [] // Remove all components
-      });
-    } catch (error) {
-      console.error('Failed to remove components:', error);
+    
+    // Set up collector for the back button
+    const collector = interaction.channel?.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      filter: (i) => i.user.id === interaction.user.id && i.customId === 'activities:back',
+      time: 60000
+    });
+    
+    if (!collector) {
+      throw new Error('Failed to create back collector');
     }
-  });
+
+    collector?.on('collect', async (i: ButtonInteraction) => {
+      try {
+        await i.deferUpdate();
+        
+        // Need to include the welcome GIF again when going back
+        const welcomeGifPath = join(__dirname, '../../../Gifs/welcome.gif');
+        const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+            
+        const welcomeEmbed = await createWelcomeEmbed(
+          interaction.user.id,
+          interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity",
+          interaction.user.displayAvatarURL()
+        );
+        
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId('register:tutorial')
+            .setLabel('📖 View Tutorial')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId('register:profile')
+            .setLabel('👤 View Profile')
+            .setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder()
+            .setCustomId('register:activities')
+            .setLabel('🎯 Available Activities')
+            .setStyle(ButtonStyle.Success)
+        );
+        
+        await i.editReply({
+          content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
+          embeds: [welcomeEmbed],
+          files: [welcomeGifAttachment], // Include the GIF file
+          components: [buttonRow]
+        });
+      } catch (error) {
+        console.error('Back button error:', error);
+        safeReply(i, '❌ Failed to go back. Please try again.');
+      }
+    });
+    
+    collector?.on('end', async () => {
+      try {
+        if (!interaction.message.deletable) {
+          await interaction.editReply({ components: [] });
+        }
+      } catch (error) {
+        console.error('Failed to cleanup activities:', error);
+      }
+    });
+  } catch (error) {
+    console.error('Activities function error:', error);
+    throw error; // Re-throw for handling in collector
+  }
+}
+
+async function safeReply(i: ButtonInteraction, content: string, ephemeral = true) {
+  try {
+    if (i.replied || i.deferred) {
+      await i.editReply({ content });
+    } else {
+      await i.reply({ content, ephemeral });
+    }
+  } catch (error) {
+    console.error('Safe reply failed:', error);
+  }
+}
+
+async function safeUpdate(i: ButtonInteraction, data: any) {
+  try {
+    await i.update(data);
+  } catch (error) {
+    console.error('Safe update failed:', error);
+    try {
+      await i.followUp({ content: '❌ Failed to update message. Please try again.', ephemeral: true });
+    } catch (innerError) {
+      console.error('Follow-up failed:', innerError);
+    }
+  }
 }

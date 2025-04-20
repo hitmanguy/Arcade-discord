@@ -1,0 +1,381 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const handler_1 = require("../../../handler");
+const discord_js_1 = require("discord.js");
+const promises_1 = require("node:timers/promises");
+const user_services_1 = require("../../../services/user_services");
+const GAME_CONSTANTS_1 = require("../../../constants/GAME_CONSTANTS");
+const Device_schema_1 = require("../../../model/Device_schema");
+const path_1 = require("path");
+exports.default = new handler_1.SlashCommand({
+    registerType: handler_1.RegisterType.Guild,
+    data: new discord_js_1.SlashCommandBuilder()
+        .setName('register')
+        .setDescription('Register as an inmate in the Infinite Prison')
+        .addStringOption(option => option
+        .setName('crime')
+        .setDescription('What crime brings you to Infinite Prison? (Optional)')
+        .setRequired(false)),
+    async execute(interaction) {
+        try {
+            await interaction.deferReply({ flags: [discord_js_1.MessageFlags.Ephemeral] });
+        }
+        catch (error) {
+            console.error('Failed to defer reply:', error);
+            return;
+        }
+        const member = interaction.member;
+        if (!member) {
+            await interaction.editReply({ content: '❌ Failed to get member information.' });
+            return;
+        }
+        const userId = interaction.user.id;
+        const existingUser = await user_services_1.UserService.getUserData(userId);
+        if (existingUser) {
+            await interaction.editReply({
+                content: `⚠️ You are already registered as inmate #${userId.slice(-6)}!`
+            });
+            return;
+        }
+        const loadingEmbed = new discord_js_1.EmbedBuilder()
+            .setColor(GAME_CONSTANTS_1.PRISON_COLORS.primary)
+            .setTitle('🔄 Processing New Inmate...')
+            .setDescription('```\nScanning biometric data...\n```');
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        for (let i = 0; i < 3; i++) {
+            await (0, promises_1.setTimeout)(800);
+            await interaction.editReply({
+                embeds: [
+                    loadingEmbed.setDescription(`\`\`\`\nInitializing prisoner profile${'.'.repeat(i + 1)}\n\`\`\``)
+                ]
+            });
+        }
+        const crime = interaction.options.getString('crime') || "Unknown crimes against humanity";
+        const newUser = await user_services_1.UserService.createNewUser(userId, interaction.user.username);
+        if (!newUser) {
+            await interaction.editReply({ content: '❌ Failed to register you in the system. Please try again later.' });
+            return;
+        }
+        for (const item of GAME_CONSTANTS_1.STARTER_ITEMS) {
+            await user_services_1.UserService.addToInventory(userId, item.itemId, item.name, item.quantity);
+        }
+        const welcomeGifPath = (0, path_1.join)(__dirname, '../../../Gifs/welcome.gif');
+        const welcomeGifAttachment = new discord_js_1.AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+        const welcomeEmbed = new discord_js_1.EmbedBuilder()
+            .setColor(GAME_CONSTANTS_1.PRISON_COLORS.danger)
+            .setTitle(`🔒 WELCOME TO INFINITE PRISON - INMATE #${userId.slice(-6)}`)
+            .setDescription(`*"${crime}"*\n\nYour sentence begins today. There is no escape from the Infinite Prison.`)
+            .setImage('attachment://welcome.gif')
+            .setThumbnail(interaction.user.displayAvatarURL())
+            .addFields({
+            name: '📜 Prison Rules',
+            value: '1. Obey all guard instructions\n2. No escape attempts\n3. Daily check-ins required\n4. No contraband items\n5. Maintain acceptable sanity levels'
+        }, {
+            name: '🎮 How To Play',
+            value: 'The Infinite Prison is a daily survival game. Complete activities, earn merit points, and try to maintain your sanity while avoiding suspicion. Use `/profile` to check your status and `/activities` to see available actions.'
+        }, {
+            name: '⚠️ Warning',
+            value: 'Your actions have consequences. High suspicion levels will result in isolation. Low sanity may lead to hallucinations or worse.'
+        })
+            .setFooter({ text: `Incarceration Date: ${new Date().toLocaleDateString()}` });
+        const buttonRow = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
+            .setCustomId('register:tutorial')
+            .setLabel('📖 View Tutorial')
+            .setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder()
+            .setCustomId('register:profile')
+            .setLabel('👤 View Profile')
+            .setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder()
+            .setCustomId('register:activities')
+            .setLabel('🎯 Available Activities')
+            .setStyle(discord_js_1.ButtonStyle.Success));
+        await interaction.editReply({
+            content: `<@${userId}> has been processed and admitted to the Infinite Prison.`,
+            embeds: [welcomeEmbed],
+            files: [welcomeGifAttachment],
+            components: [buttonRow]
+        });
+        const collector = interaction.channel?.createMessageComponentCollector({
+            componentType: discord_js_1.ComponentType.Button,
+            filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('register:'),
+            time: 300000
+        });
+        if (!collector) {
+            console.error('Failed to create collector');
+            return;
+        }
+        collector.on('collect', async (i) => {
+            try {
+                const action = i.customId.split(':')[1];
+                switch (action) {
+                    case 'tutorial':
+                        await showTutorial(i).catch(error => {
+                            console.error('Tutorial error:', error);
+                            safeReply(i, '❌ Failed to show tutorial. Please try again.');
+                        });
+                        break;
+                    case 'profile':
+                        await safeReply(i, 'Use the `/profile view` command to see your full profile!', true);
+                        break;
+                    case 'activities':
+                        await showActivities(i).catch(error => {
+                            console.error('Activities error:', error);
+                            safeReply(i, '❌ Failed to show activities. Please try again.');
+                        });
+                        break;
+                }
+            }
+            catch (error) {
+                console.error('Collector error:', error);
+                safeReply(i, '❌ Something went wrong. Please try again.');
+            }
+        });
+        collector.on('end', async () => {
+            try {
+                const message = await interaction.fetchReply();
+                if (message) {
+                    await interaction.editReply({ components: [] });
+                }
+            }
+            catch (error) {
+                console.error('Failed to cleanup components:', error);
+            }
+        });
+        await (0, promises_1.setTimeout)(60000);
+        try {
+            const updatedDevice = await Device_schema_1.Device.findOneAndUpdate({ discordId: userId }, {
+                $set: { activated: true },
+                $push: {
+                    messages: {
+                        sender: '???',
+                        content: 'You feel a cold object in your hand. A hidden device? Use `/device` to access it. Trust no one.',
+                        sentAt: new Date(),
+                        read: false
+                    }
+                }
+            }, {
+                upsert: true,
+                new: true,
+                setDefaultsOnInsert: true
+            });
+            if (!updatedDevice) {
+                throw new Error('Failed to create or update device');
+            }
+        }
+        catch (error) {
+            console.error('Error managing device:', error);
+            throw error;
+        }
+        const mysteriousEmbed = new discord_js_1.EmbedBuilder()
+            .setColor('#6f42c1')
+            .setTitle('A Mysterious Device...')
+            .setDescription('A cryptic message appears on a hidden screen:\n\n*You have been chosen. Use `/device` to connect. Beware the eyes in the dark...*')
+            .setFooter({ text: 'The device vibrates softly in your palm.' });
+        await interaction.followUp({ embeds: [mysteriousEmbed], flags: [discord_js_1.MessageFlags.Ephemeral] });
+        newUser.deviceActivated = true;
+        await newUser.save();
+        await (0, promises_1.setTimeout)(2000);
+    },
+});
+async function createWelcomeEmbed(userId, crime, userAvatar) {
+    return new discord_js_1.EmbedBuilder()
+        .setColor(GAME_CONSTANTS_1.PRISON_COLORS.danger)
+        .setTitle(`🔒 WELCOME TO INFINITE PRISON - INMATE #${userId.slice(-6)}`)
+        .setDescription(`*"${crime}"*\n\nYour sentence begins today. There is no escape from the Infinite Prison.`)
+        .setImage('attachment://welcome.gif')
+        .setThumbnail(userAvatar)
+        .addFields({
+        name: '📜 Prison Rules',
+        value: '1. Obey all guard instructions\n2. No escape attempts\n3. Daily check-ins required\n4. No contraband items\n5. Maintain acceptable sanity levels'
+    }, {
+        name: '🎮 How To Play',
+        value: 'The Infinite Prison is a daily survival game. Complete activities, earn merit points, and try to maintain your sanity while avoiding suspicion. Use `/profile` to check your status and `/activities` to see available actions.'
+    }, {
+        name: '⚠️ Warning',
+        value: 'Your actions have consequences. High suspicion levels will result in isolation. Low sanity may lead to hallucinations or worse.'
+    })
+        .setFooter({ text: `Incarceration Date: ${new Date().toLocaleDateString()}` });
+}
+async function showTutorial(interaction) {
+    try {
+        const tutorialEmbed = new discord_js_1.EmbedBuilder()
+            .setColor(GAME_CONSTANTS_1.PRISON_COLORS.info)
+            .setTitle('📖 HOW TO SURVIVE IN THE INFINITE PRISON')
+            .setDescription('Survival in the Infinite Prison is a daily challenge. To make it, you must:\n\n' +
+            '• **Play Escape Games:** Use `/puzzle`, `/tunnel`, `/uno`, `/matching`, and `/number-game` to progress your escape and unlock new areas.\n' +
+            '• **Manage Your Stats:** Keep your **Sanity** high, **Suspicion** low, and earn **Merit Points** to buy items from the `/shop`.\n' +
+            '• **Use Your Device:** Soon, you\'ll receive a `/device` to communicate with other inmates and uncover secrets.\n' +
+            '• **Balance Your Routine:** Daily check-ins, activities, and smart choices are key. High suspicion leads to isolation. Low sanity brings hallucinations. Merit points are your lifeline.\n\n' +
+            'Explore, strategize, and survive. Only the cleverest inmates will discover the secrets of the Infinite Prison.')
+            .addFields({
+            name: '🏪 Shop & Items',
+            value: 'Use `/shop` to buy items that help you survive. Manage your inventory.'
+        }, {
+            name: '📊 Core Stats',
+            value: '• **Survival Days**: How long you\'ve lasted\n• **Sanity**: Mental health (0-100)\n• **Merit Points**: Currency for purchases\n• **Suspicion Level**: How closely guards watch you'
+        })
+            .setFooter({ text: 'Remember: The walls have eyes. Your choices matter.' });
+        const backButton = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
+            .setCustomId('tutorial:back')
+            .setLabel('⬅️ Back')
+            .setStyle(discord_js_1.ButtonStyle.Secondary));
+        await safeUpdate(interaction, {
+            embeds: [tutorialEmbed],
+            components: [backButton]
+        });
+        const collector = interaction.channel?.createMessageComponentCollector({
+            componentType: discord_js_1.ComponentType.Button,
+            filter: (i) => i.user.id === interaction.user.id && i.customId === 'tutorial:back',
+            time: 60000
+        });
+        if (!collector) {
+            throw new Error('Failed to create back collector');
+        }
+        collector?.on('collect', async (i) => {
+            try {
+                await i.deferUpdate();
+                const welcomeGifPath = (0, path_1.join)(__dirname, '../../../Gifs/welcome.gif');
+                const welcomeGifAttachment = new discord_js_1.AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+                const welcomeEmbed = await createWelcomeEmbed(interaction.user.id, interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity", interaction.user.displayAvatarURL());
+                const buttonRow = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
+                    .setCustomId('register:tutorial')
+                    .setLabel('📖 View Tutorial')
+                    .setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder()
+                    .setCustomId('register:profile')
+                    .setLabel('👤 View Profile')
+                    .setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder()
+                    .setCustomId('register:activities')
+                    .setLabel('🎯 Available Activities')
+                    .setStyle(discord_js_1.ButtonStyle.Success));
+                await i.editReply({
+                    content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
+                    embeds: [welcomeEmbed],
+                    files: [welcomeGifAttachment],
+                    components: [buttonRow]
+                });
+            }
+            catch (error) {
+                console.error('Back button error:', error);
+                safeReply(i, '❌ Failed to go back. Please try again.');
+            }
+        });
+        collector?.on('end', async () => {
+            try {
+                if (interaction.message.deletable) {
+                    await interaction.editReply({ components: [] });
+                }
+            }
+            catch (error) {
+                console.error('Failed to cleanup tutorial:', error);
+            }
+        });
+    }
+    catch (error) {
+        console.error('Tutorial function error:', error);
+        throw error;
+    }
+}
+async function showActivities(interaction) {
+    try {
+        const activitiesEmbed = new discord_js_1.EmbedBuilder()
+            .setColor(GAME_CONSTANTS_1.PRISON_COLORS.success)
+            .setTitle('🎯 AVAILABLE ACTIVITIES')
+            .setDescription('Commands and features you can use in the Infinite Prison:')
+            .addFields({
+            name: '📋 Basic Commands',
+            value: '`/profile view` - View your inmate profile\n`/profile customize` - Customize your profile (soon upcoming)\n`/shop` - Buy useful items'
+        }, {
+            name: '📱 Device',
+            value: '`/device` *(provided to you soon)* - Access your mysterious prison device. Use it to talk to other inmates and uncover secrets.'
+        }, {
+            name: '🕹️ Escape Games',
+            value: '`/puzzle`, `/tunnel`, `/uno`, `/matching`, `/number-game` - Play games to progress your escape attempts and survive the prison.'
+        })
+            .setFooter({ text: 'New activities unlock as you progress and explore more of the prison.' });
+        const backButton = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
+            .setCustomId('activities:back')
+            .setLabel('⬅️ Back')
+            .setStyle(discord_js_1.ButtonStyle.Secondary));
+        await safeUpdate(interaction, {
+            embeds: [activitiesEmbed],
+            components: [backButton]
+        });
+        const collector = interaction.channel?.createMessageComponentCollector({
+            componentType: discord_js_1.ComponentType.Button,
+            filter: (i) => i.user.id === interaction.user.id && i.customId === 'activities:back',
+            time: 60000
+        });
+        if (!collector) {
+            throw new Error('Failed to create back collector');
+        }
+        collector?.on('collect', async (i) => {
+            try {
+                await i.deferUpdate();
+                const welcomeGifPath = (0, path_1.join)(__dirname, '../../../Gifs/welcome.gif');
+                const welcomeGifAttachment = new discord_js_1.AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+                const welcomeEmbed = await createWelcomeEmbed(interaction.user.id, interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity", interaction.user.displayAvatarURL());
+                const buttonRow = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
+                    .setCustomId('register:tutorial')
+                    .setLabel('📖 View Tutorial')
+                    .setStyle(discord_js_1.ButtonStyle.Primary), new discord_js_1.ButtonBuilder()
+                    .setCustomId('register:profile')
+                    .setLabel('👤 View Profile')
+                    .setStyle(discord_js_1.ButtonStyle.Secondary), new discord_js_1.ButtonBuilder()
+                    .setCustomId('register:activities')
+                    .setLabel('🎯 Available Activities')
+                    .setStyle(discord_js_1.ButtonStyle.Success));
+                await i.editReply({
+                    content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
+                    embeds: [welcomeEmbed],
+                    files: [welcomeGifAttachment],
+                    components: [buttonRow]
+                });
+            }
+            catch (error) {
+                console.error('Back button error:', error);
+                safeReply(i, '❌ Failed to go back. Please try again.');
+            }
+        });
+        collector?.on('end', async () => {
+            try {
+                if (!interaction.message.deletable) {
+                    await interaction.editReply({ components: [] });
+                }
+            }
+            catch (error) {
+                console.error('Failed to cleanup activities:', error);
+            }
+        });
+    }
+    catch (error) {
+        console.error('Activities function error:', error);
+        throw error;
+    }
+}
+async function safeReply(i, content, ephemeral = true) {
+    try {
+        if (i.replied || i.deferred) {
+            await i.editReply({ content });
+        }
+        else {
+            await i.reply({ content, ephemeral });
+        }
+    }
+    catch (error) {
+        console.error('Safe reply failed:', error);
+    }
+}
+async function safeUpdate(i, data) {
+    try {
+        await i.update(data);
+    }
+    catch (error) {
+        console.error('Safe update failed:', error);
+        try {
+            await i.followUp({ content: '❌ Failed to update message. Please try again.', ephemeral: true });
+        }
+        catch (innerError) {
+            console.error('Follow-up failed:', innerError);
+        }
+    }
+}
+//# sourceMappingURL=Register.js.map
