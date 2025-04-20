@@ -45,7 +45,7 @@ export default new SlashCommand({
     if (!device || !device.activated) {
       await interaction.reply({
         content: 'You fumble in your pockets... but find nothing. (Register to receive your device!)',
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -73,7 +73,7 @@ export default new SlashCommand({
     await interaction.reply({
       embeds: [embed],
       components: [selectRow],
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
 
     // 2. Wait for contact selection

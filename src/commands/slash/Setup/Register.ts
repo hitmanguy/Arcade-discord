@@ -32,7 +32,7 @@ export default new SlashCommand({
     ) as SlashCommandBuilder,
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
     
     const member = interaction.member;
     if (!member) {

@@ -5,7 +5,8 @@ import {
   TextChannel,
   ColorResolvable,
   SlashCommandBuilder,
-  SlashCommandAttachmentOption
+  SlashCommandAttachmentOption,
+  MessageFlags
 } from 'discord.js';
 import { createGame, joinGame, startGame, getActiveGames } from '../../../functions/numbers-game-lobby';
 import { GameState } from '../../../functions/numbers-game-state';
@@ -114,7 +115,7 @@ async function handleCreateGame(interaction: ChatInputCommandInteraction, user: 
         )
         .setFooter({ 
           text: user.sanity < 30 
-            ? 'T̷h̷e̶ ̷n̶u̵m̷b̴e̷r̶s̷ ̵w̷h̵i̷s̷p̵e̷r̵.̷.̶.' 
+            ? 'T̷h̷e̷ ̷n̶u̵m̷b̴e̷r̶s̷ ̵w̷h̵i̷s̷p̵e̷r̵.̷.̶.' 
             : 'Initiate protocol with /numbers start' 
         });
       
@@ -128,7 +129,7 @@ async function handleJoinGame(interaction: ChatInputCommandInteraction, user: Us
     if (!result.success) {
       await interaction.reply({ 
         content: `❌ ${result.message}`, 
-        ephemeral: true 
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -204,7 +205,7 @@ async function handleListGames(interaction: ChatInputCommandInteraction) {
     if (games.length === 0) {
       await interaction.reply({ 
         content: 'No active protocol instances found. Initialize one with `/numbers create`!',
-        ephemeral: true 
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -221,7 +222,7 @@ async function handleListGames(interaction: ChatInputCommandInteraction) {
       });
     });
     
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
 }
 
 // Keep helper functions outside the command class

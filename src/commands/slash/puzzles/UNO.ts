@@ -118,7 +118,7 @@ export default new SlashCommand({
 
         collector?.on('collect', async (btnInteraction) => {
           if (btnInteraction.user.id !== interaction.user.id) {
-            return btnInteraction.reply({ content: 'This is not your game!', ephemeral: true });
+            return btnInteraction.reply({ content: 'This is not your game!', flags: [MessageFlags.Ephemeral] });
           }
 
           const chosen = btnInteraction.customId.split(':')[2];

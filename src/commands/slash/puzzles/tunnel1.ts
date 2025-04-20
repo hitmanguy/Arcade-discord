@@ -10,7 +10,8 @@ import {
     TextInputBuilder,
     TextInputStyle,
     ComponentType,
-    ModalSubmitInteraction
+    ModalSubmitInteraction,
+    MessageFlags
 } from 'discord.js';
 import { User, UserDocument } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
@@ -266,34 +267,71 @@ export default new SlashCommand({
         const modalFilter = (i: ModalSubmitInteraction) => i.customId === 'sequence_input' && i.user.id === interaction.user.id;
         
         interaction.awaitModalSubmit({ filter: modalFilter, time: 120000 })
-            .then(async submission => {
-                submission.deferUpdate();
-                // Process the user's answer
-                const answer = submission.fields.getTextInputValue('sequence_answer')
-                    .trim().toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ');
-                
-                // Validate input format
-                const userMoves = answer.split(' ');
-                const validDirections = ['up', 'down', 'left', 'right'];
-                const isValidInput = userMoves.every(move => validDirections.includes(move));
-                
-                if (!isValidInput) {
-                    await submission.reply({
-                        content: 'Invalid input! Please use only: up, down, left, right (separated by spaces)',
-                        ephemeral: true
-                    });
+    .then(async submission => {
+        // Properly defer the modal response
+        await submission.deferReply({ ephemeral: true });
+
+        // Process answer
+        const answer = submission.fields.getTextInputValue('sequence_answer')
+            .trim().toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ');
+        
+        // Validate input
+        const userMoves = answer.split(' ');
+        const validDirections = ['up', 'down', 'left', 'right'];
+        const isValidInput = userMoves.every(move => validDirections.includes(move));
+        const correctLength = game.sequence.length;
+
+        // Enhanced validation
+        if (!isValidInput || userMoves.length !== correctLength) {
+            const penaltyPoints = PUZZLE_REWARDS[game.difficulty].failure.meritPoints * 2;
+            const sanityCost = PUZZLE_REWARDS[game.difficulty].failure.sanity * 1.5;
+
+            await UserService.updateUserStats(interaction.user.id, {
+                meritPoints: user.meritPoints + penaltyPoints,
+                sanity: Math.max(user.sanity + sanityCost, 0),
+                suspiciousLevel: Math.min(user.suspiciousLevel + 15, 100),
+                totalGamesPlayed: user.totalGamesPlayed + 1,
+                currentStreak: 0
+            });
+
+            const failureEmbed = new EmbedBuilder()
+                .setColor(PRISON_COLORS.danger)
+                .setTitle('⚠️ Invalid Input')
+                .setDescription(
+                    `Your input must contain exactly ${correctLength} valid directions!\n` +
+                    `Received: ${userMoves.length} directions | Expected: ${correctLength}\n` +
+                    `Invalid entries: ${userMoves.filter(m => !validDirections.includes(m)).join(', ') || 'None'}`
+                )
+                .addFields({
+                    name: '📌 Requirements',
+                    value: `• ${correctLength} directions\n• Valid options: up, down, left, right`
+                });
+
+                    await submission.editReply({ embeds: [failureEmbed] });
+                    collector.stop();
                     return;
                 }
-                
-                // Calculate accuracy
-                const correctMoves = sequence;
+
+                // Process correct answer
                 let correctCount = 0;
-                
-                for (let i = 0; i < correctMoves.length; i++) {
-                    if (userMoves[i] === correctMoves[i]) {
-                        correctCount++;
-                    }
+                game.sequence.forEach((correctMove, index) => {
+                    if (userMoves[index] === correctMove) correctCount++;
+                });
+
+                                // Add this validation check before processing the answer
+                if (userMoves.length !== game.sequence.length) {
+                    const lengthEmbed = new EmbedBuilder()
+                        .setColor(PRISON_COLORS.warning)
+                        .setTitle('⚠️ Incorrect Length')
+                        .setDescription(
+                            `Your sequence length (${userMoves.length}) doesn't match the required length (${game.sequence.length})!\n` +
+                            `Please try again with exactly ${game.sequence.length} directions.`
+                        );
+                    
+                    await submission.editReply({ embeds: [lengthEmbed] });
+                    return;
                 }
+
                 
                 const matchRatio = correctCount / sequence.length;
                 const scorePercentage = Math.round(matchRatio * 100);
@@ -301,6 +339,47 @@ export default new SlashCommand({
                 // Calculate rewards
                 const rewards = PUZZLE_REWARDS[game.difficulty];
                 const isSuccess = scorePercentage >= 70;
+                // For wrong sequences (where scorePercentage < 70), modify the rewards calculation:
+                    if (!isSuccess) {
+                        const penaltyPoints = rewards.failure.meritPoints * 1.5; // 50% more penalty
+                        const sanityCost = rewards.failure.sanity * 1.2; // 20% more sanity loss
+                        const suspicionIncrease = 8; // Higher suspicion for failure
+
+                        // Update user stats with increased penalties
+                        await UserService.updateUserStats(interaction.user.id, {
+                            meritPoints: user.meritPoints + penaltyPoints,
+                            sanity: Math.min(Math.max(user.sanity + sanityCost, 0), 100),
+                            suspiciousLevel: Math.min(user.suspiciousLevel + suspicionIncrease, 100),
+                            totalGamesPlayed: user.totalGamesPlayed + 1,
+                            totalGamesWon: user.totalGamesWon,
+                            currentStreak: 0
+                        });
+                        
+                        // Remove retry option - game over on first fail
+                        const resultEmbed = new EmbedBuilder()
+                            .setColor(PRISON_COLORS.danger)
+                            .setTitle('🚫 Security Breach Detected')
+                            .setDescription(
+                                'Incorrect sequence entered. Security measures activated.\n\n' +
+                                `Correct Sequence: ${formatSequence(game.sequence, 100)}\n` +
+                                `Your Sequence: ${formatSequence(userMoves.slice(0, game.sequence.length), user.sanity)}\n` +
+                                `Accuracy: ${scorePercentage}%`
+                            )
+                            .addFields({
+                                name: '📊 Penalties Applied',
+                                value: 
+                                    `Merit Points: ${penaltyPoints}\n` +
+                                    `Sanity: ${sanityCost}\n` +
+                                    `Suspicion: +${suspicionIncrease}\n` +
+                                    `Streak: Reset to 0`
+                            })
+                            .setFooter({ text: 'The system remembers your failure...' });
+
+                        await submission.editReply({ embeds: [resultEmbed], components: [] });
+                        collector.stop();
+                        return;
+                    }
+
                 
                 const meritChange = isSuccess ? rewards.success.meritPoints : rewards.failure.meritPoints;
                 const sanityChange = isSuccess ? rewards.success.sanity : rewards.failure.sanity;
@@ -329,8 +408,8 @@ export default new SlashCommand({
                         `${isSuccess 
                             ? 'You found your way through the digital labyrinth!'
                             : 'The path proved too treacherous...'}\n\n` +
-                        `Correct Sequence: ${formatSequence(correctMoves, 100)}\n` +
-                        `Your Sequence: ${formatSequence(userMoves.slice(0, correctMoves.length), user.sanity)}\n` +
+                        `Correct Sequence: ${formatSequence(game.sequence, 100)}\n` +
+                        `Your Sequence: ${formatSequence(userMoves.slice(0, game.sequence.length), user.sanity)}\n` +
                         `Accuracy: ${scorePercentage}%`
                     )
                     .addFields({
@@ -346,24 +425,9 @@ export default new SlashCommand({
                             ? 'T̷h̷e̶ ̷m̶a̵z̷e̴ ̷n̶e̷v̵e̷r̵ ̷e̶n̷d̵s̶.̷.̶.' 
                             : isSuccess ? 'The path becomes clearer...' : 'The tunnels shift and change...' 
                     });
-                
-                // Add retry button if attempts remain
-                const components: ActionRowBuilder<ButtonBuilder>[] = [];
-                if (!isSuccess && game.attempts < game.maxAttempts - 1) {
-                    const row = new ActionRowBuilder<ButtonBuilder>()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId('retry_tunnel')
-                                .setLabel(`Retry (${game.maxAttempts - game.attempts - 1} left)`)
-                                .setStyle(ButtonStyle.Primary)
-                                .setDisabled(user.sanity < 20)
-                        );
-                    components.push(row);
-                }
-                
+        
                 await submission.reply({
                     embeds: [resultEmbed],
-                    components: components
                 });
                 
                 collector.stop();
@@ -372,7 +436,7 @@ export default new SlashCommand({
                 // Handle timeout or error
                 interaction.followUp({
                     content: 'You did not submit a sequence in time or an error occurred.',
-                    ephemeral: true
+                    flags: [MessageFlags.Ephemeral]
                 }).catch(console.error);
             });
     }

@@ -6,7 +6,8 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ComponentType
+    ComponentType,
+    MessageFlags
 } from 'discord.js';
 import { User, UserDocument } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
@@ -193,7 +194,7 @@ export default new SlashCommand ({
             if (btnInteraction.user.id !== interaction.user.id) {
                 await btnInteraction.reply({
                     content: 'These symbols aren\'t meant for you...',
-                    ephemeral: true
+                    flags: [MessageFlags.Ephemeral]
                 });
                 return;
             }
