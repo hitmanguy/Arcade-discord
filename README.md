@@ -161,6 +161,11 @@ CHARACTER_TOKEN = "character.ai token for chatbot"
 
 
 ---
+## 📽️ Discord Deployment Link
+
+You can deploy the bot into your own discord server using this link : https://discord.com/oauth2/authorize?client_id=1360309700599742594
+---
+
 ## 👨‍💻 Contributors
 
 - **Sahil Chauhan** — IMT2024090
