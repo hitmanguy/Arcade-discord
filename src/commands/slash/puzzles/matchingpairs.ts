@@ -8,11 +8,13 @@ import {
     ButtonStyle,
     ComponentType,
     MessageFlags,
-    ColorResolvable
+    ColorResolvable,
+    AttachmentBuilder
 } from 'discord.js';
 import { User, UserDocument } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
 import { STORYLINE, PRISON_COLORS, PUZZLE_REWARDS, SANITY_EFFECTS, createProgressBar } from '../../../constants/GAME_CONSTANTS';
+import { join } from 'path';  // Add this import for path handling
 
 interface Card {
     id: number;
@@ -99,7 +101,9 @@ function createBoardEmbed(game: MatchingGame, user: UserDocument, difficulty: st
             text: user.sanity < 40 
                 ? 'T̷h̷e̶ ̷s̶y̵m̷b̴o̷l̶s̷ ̵s̷h̵i̷f̷t̵.̷.̶.' 
                 : 'Match the symbols before they fade...' 
-        });
+        })
+        // The GIF will be added when sending the message, not here
+        // We'll reference it in the "image" property later
 }
 
 function createGameButtons(game: MatchingGame, user: UserDocument): ActionRowBuilder<ButtonBuilder>[] {
@@ -204,12 +208,18 @@ export default new SlashCommand ({
         const difficulty = interaction.options.getString('difficulty', true) as 'easy' | 'medium' | 'hard';
         const game = createGame(difficulty);
 
+        // Create the attachment for the memory GIF from local file
+        const memoryGifPath = join(__dirname, '../../../Gifs/Memory.gif');
+        const memoryGifAttachment = new AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
+
         // Initial board display
-        const embed = createBoardEmbed(game, user, difficulty);
+        const embed = createBoardEmbed(game, user, difficulty)
+            .setImage('attachment://Memory.gif'); // Add the GIF to the embed
         const components = createGameButtons(game, user);
         
         const message = await interaction.editReply({
             embeds: [embed],
+            files: [memoryGifAttachment], // Include the GIF file
             components: components
         });
 
@@ -247,7 +257,7 @@ export default new SlashCommand ({
                     // First card selected
                     game.firstCard = card;
                     await btnInteraction.update({
-                        embeds: [createBoardEmbed(game, user, difficulty)],
+                        embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
                         components: createGameButtons(game, user)
                     });
                 } else {
@@ -258,7 +268,7 @@ export default new SlashCommand ({
                     
                     // First, update to show both cards
                     await btnInteraction.update({
-                        embeds: [createBoardEmbed(game, user, difficulty)],
+                        embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
                         components: createGameButtons(game, user)
                     });
 
@@ -315,6 +325,9 @@ export default new SlashCommand ({
                             UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', isSuccess)
                         ]);
 
+                        // Create a new attachment for the result screen
+                        const memoryGifAttachment = new AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
+
                         // Final result embed
                         const resultEmbed = new EmbedBuilder()
                             .setColor(isSuccess ? PRISON_COLORS.success : PRISON_COLORS.danger)
@@ -334,6 +347,7 @@ export default new SlashCommand ({
                                     `Streak: ${isSuccess ? user.currentStreak + 1 : '0'}` +
                                     (suspicionChange > 0 ? `\n⚠️ Suspicion: +${suspicionChange}` : '')
                             })
+                            .setImage('attachment://Memory.gif') // Include the GIF in the result screen
                             .setFooter({ 
                                 text: user.sanity < 30 
                                     ? 'T̷h̷e̶ ̷s̶y̵m̷b̴o̷l̶s̷ ̵h̷a̵u̷n̷t̵ ̷y̶o̵u̷.̶.̶.' 
@@ -343,6 +357,7 @@ export default new SlashCommand ({
                         // Edit original interaction message since the collector is stopping
                         await interaction.editReply({
                             embeds: [resultEmbed],
+                            files: [memoryGifAttachment], // Include the GIF file
                             components: []
                         });
                     } else {
@@ -350,8 +365,12 @@ export default new SlashCommand ({
                         game.processingMatch = false;  // Reset the processing flag
                         
                         // Use the original interaction to edit the message
+                        // We need to include the attachment again when updating
+                        const memoryGifAttachment = new AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
+                        
                         await interaction.editReply({
-                            embeds: [createBoardEmbed(game, user, difficulty)],
+                            embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
+                            files: [memoryGifAttachment],
                             components: createGameButtons(game, user)
                         });
                     }
@@ -369,6 +388,9 @@ export default new SlashCommand ({
 
         collector.on('end', async (collected, reason) => {
             if (reason === 'time') {
+                // Create a new attachment for the timeout screen
+                const memoryGifAttachment = new AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
+                
                 const timeoutEmbed = new EmbedBuilder()
                     .setColor(PRISON_COLORS.warning)
                     .setTitle('⏰ Time\'s Up!')
@@ -376,11 +398,13 @@ export default new SlashCommand ({
                         ? 'T̵i̸m̵e̵ ̸d̵i̷s̷s̴o̵l̶v̷e̷s̴ ̶i̵n̷t̵o̷ ̵s̶h̴a̵d̷o̵w̴s̶.̷.̶.'
                         : 'The symbols fade into the void...\nPerhaps speed is as important as memory.'
                     )
+                    .setImage('attachment://Memory.gif')
                     .setFooter({ text: 'Try another round with /matching' });
 
                 try {
                     await interaction.editReply({
                         embeds: [timeoutEmbed],
+                        files: [memoryGifAttachment],
                         components: []
                     });
                 } catch (error) {
