@@ -54,7 +54,7 @@ export default new SlashCommand({
       return;
     }
 
-    const deviceGifPath = join(__dirname, '../../Gifs/Device.gif');
+    const deviceGifPath = join(__dirname, '../../../Gifs/device.gif');
     const deviceGifAttachment = new AttachmentBuilder(deviceGifPath, { name: 'Device.gif' });
 
     // 1. Show contact selection menu
@@ -84,49 +84,6 @@ export default new SlashCommand({
       files: [deviceGifAttachment],
       flags: [MessageFlags.Ephemeral]
     });
-    async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-      const device = await Device.findOne({ discordId: interaction.user.id });
-    
-      if (!device || !device.activated) {
-        await interaction.reply({
-          content: 'You fumble in your pockets... but find nothing. (Register to receive your device!)',
-          ephemeral: true
-        });
-        return;
-      }
-    
-      // Create device GIF attachment
-      const deviceGifPath = join(__dirname, '../../Gifs/Device.gif');
-      const deviceGifAttachment = new AttachmentBuilder(deviceGifPath, { name: 'Device.gif' });
-    
-      // 1. Show contact selection menu
-      const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('device:select_contact')
-        .setPlaceholder('Select a contact to message...')
-        .addOptions(
-          CONTACTS.map(c => ({
-            label: c.name,
-            value: c.id,
-            emoji: c.emoji
-          }))
-        );
-    
-      const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
-    
-      const embed = new EmbedBuilder()
-        .setColor('#6f42c1')
-        .setTitle('📱 Prison Device Interface')
-        .setDescription('Who do you want to contact?')
-        .setImage('attachment://Device.gif')  // Reference the attachment
-        .setFooter({ text: 'Select a contact to start chatting.' });
-    
-      await interaction.reply({
-        embeds: [embed],
-        components: [selectRow],
-        files: [deviceGifAttachment],  // Include the GIF file
-        ephemeral: true
-      });
-
     // 2. Wait for contact selection
     const selectInteraction = await interaction.channel?.awaitMessageComponent({
       componentType: ComponentType.StringSelect,

@@ -48,11 +48,11 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
         .setDescription('Display the rules of King of Diamonds')
     )as SlashCommandBuilder,
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
          const user = await User.findOne({ discordId: interaction.user.id });
                 if (!user) {
-                    await interaction.reply({
+                    await interaction.editReply({
                         content: 'You must be registered to use this command. Use `/register` first.',
-                        ephemeral: true
                     });
                     return;
                 }
@@ -107,9 +107,8 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
   
     // Check if there's already an active game in this channel
     if (activeGames.has(channelId)) {
-      await interaction.reply({
+      await interaction.editReply({
         content: 'There is already an active King of Diamonds game in this channel! Use `/king-of-diamonds join` to join it.',
-        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -127,9 +126,8 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     });
   
     if (!success) {
-      await interaction.reply({
+      await interaction.editReply({
         content: 'Failed to create the game. Please try again.',
-        flags: [MessageFlags.Ephemeral]
       });
       activeGames.delete(channelId);
       return;
@@ -159,12 +157,11 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
       )
       .setFooter({ text: 'The game will start when the host clicks "Start Game"' });
   
-    const response = await interaction.reply({
+    const res = await interaction.reply({
       embeds: [embed],
       components: [row],
-      fetchReply: true
     });
-  
+    const response = await res.fetch();
     // Create a collector for the join button
     const collector = response.createMessageComponentCollector({
       componentType: ComponentType.Button,
@@ -223,9 +220,8 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     
     // Check if player is already in the game
     if (game.hasPlayer(interaction.user.id)) {
-      await interaction.reply({
+      await interaction.editReply({
         content: 'You have already joined this game!',
-        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -238,9 +234,8 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     });
   
     if (!success) {
-      await interaction.reply({
+      await interaction.editReply({
         content: 'Failed to join the game. The game might be full.',
-        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -253,27 +248,26 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
       { name: 'Minimum Players', value: '3', inline: true }
     );
   
-    await interaction.update({
+    await interaction.reply({
       embeds: [embed]
     });
   }
   
   async function handleGameJoin(interaction: CommandInteraction) {
+    await interaction.deferReply({flags: [MessageFlags.Ephemeral]});
     const channelId = interaction.channelId;
     const game = activeGames.get(channelId);
   
     if (!game) {
-      await interaction.reply({
+      await interaction.editReply({
         content: 'There is no active King of Diamonds game in this channel! Use `/king-of-diamonds start` to start one.',
-        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
   
     if (game.hasPlayer(interaction.user.id)) {
-      await interaction.reply({
+      await interaction.editReply({
         content: 'You have already joined this game!',
-        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -286,16 +280,14 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     });
   
     if (!success) {
-      await interaction.reply({
+      await interaction.editReply({
         content: 'Failed to join the game. The game might be full or already started.',
-        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
   
-    await interaction.reply({
+    await interaction.editReply({
       content: `You've joined the King of Diamonds game! Wait for the host to start the game.`,
-      flags: [MessageFlags.Ephemeral]
     });
   
     // Update the game embed if possible
@@ -356,11 +348,11 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     channelId: string
 ) {
     await game.startRound();
-    
+    const cur_rule = game.getRules();
     const embed = new EmbedBuilder()
         .setColor('#FF0000')
         .setTitle(`King of Diamonds - Round ${game.getRound()}`)
-        .setDescription('Make your selection!')
+        .setDescription(`Make your selection!\nRules:${cur_rule}`)
         .addFields(
             { name: 'Time Remaining', value: '30 seconds', inline: true },
             { name: 'Players', value: game.getActivePlayers().map(p => `${p.name} (${p.score})`).join('\n'), inline: true }

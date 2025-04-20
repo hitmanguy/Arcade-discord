@@ -150,7 +150,7 @@ export default new SlashCommand ({
                 )
         ) as SlashCommandBuilder,
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-        await interaction.deferReply();
+        await interaction.deferReply({flags: [MessageFlags.Ephemeral]});
 
         const user = await User.findOne({ discordId: interaction.user.id });
         if (!user) {
