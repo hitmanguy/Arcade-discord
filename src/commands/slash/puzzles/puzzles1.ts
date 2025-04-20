@@ -330,7 +330,7 @@ export default new SlashCommand({
           totalGamesWon: user.totalGamesWon + (isCorrect ? 1 : 0),
           currentStreak: isCorrect ? user.currentStreak + 1 : 0
         }),
-        UserService.updatePuzzleProgress(interaction.user.id, puzzle.id, isCorrect)
+        UserService.updatePuzzleProgress(interaction.user.id, 'puzzles1', isCorrect)
       ]);
 
       // Apply sanity effects to the result message

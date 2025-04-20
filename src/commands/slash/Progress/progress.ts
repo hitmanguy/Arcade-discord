@@ -22,23 +22,23 @@ function calculateRank(meritPoints: number, sanity: number) {
         )?.[1] || RANKS.novice;
 }
 
-export async function handleProgressStats(interaction: ButtonInteraction) {
-    const user = await User.findOne({ discordId: interaction.user.id });
-    if (!user) {
-        await interaction.reply({ content: 'User data not found!', ephemeral: true });
-        return;
-    }
+// export async function handleProgressStats(interaction: ButtonInteraction) {
+//     const user = await User.findOne({ discordId: interaction.user.id });
+//     if (!user) {
+//         await interaction.reply({ content: 'User data not found!', ephemeral: true });
+//         return;
+//     }
 
-    const statsEmbed = new EmbedBuilder()
-        .setColor(PRISON_COLORS.primary)
-        .setTitle('📊 Detailed Statistics')
-        .addFields(
-            { name: 'Total Completions', value: user.puzzleProgress.reduce((acc, curr) => acc + curr.completionCount, 0).toString(), inline: true },
-            { name: 'Time in Prison', value: `${Math.floor((Date.now() - user.joinedAt.getTime()) / (1000 * 60 * 60 * 24))} days`, inline: true }
-        );
+//     const statsEmbed = new EmbedBuilder()
+//         .setColor(PRISON_COLORS.primary)
+//         .setTitle('📊 Detailed Statistics')
+//         .addFields(
+//             { name: 'Total Completions', value: user.puzzleProgress.reduce((acc, curr) => acc + curr.completionCount, 0).toString(), inline: true },
+//             { name: 'Time in Prison', value: `${Math.floor((Date.now() - user.joinedAt.getTime()) / (1000 * 60 * 60 * 24))} days`, inline: true }
+//         );
 
-    await interaction.reply({ embeds: [statsEmbed], ephemeral: true });
-}
+//     await interaction.reply({ embeds: [statsEmbed], ephemeral: true });
+// }
 function getGlitchEffect(sanity: number): string {
     if (sanity > 70) return '';
     if (sanity > 50) return '`Data corruption minimal...`';

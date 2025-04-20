@@ -26,6 +26,7 @@ interface MatchingGame {
     moves: number;
     matches: number;
     maxMoves: number;
+    processingMatch: boolean; // Add this flag to track when we're processing a match
 }
 
 const CARD_EMOJIS = ['🌟', '🎯', '💫', '🔮', '⚡', '🎲', '🎪', '🎭'];
@@ -53,7 +54,8 @@ function createGame(difficulty: 'easy' | 'medium' | 'hard'): MatchingGame {
         secondCard: null,
         moves: 0,
         matches: 0,
-        maxMoves: pairs * 3 // Allow some extra moves based on difficulty
+        maxMoves: pairs * 3, // Allow some extra moves based on difficulty
+        processingMatch: false // Initialize the flag
     };
 }
 
@@ -109,20 +111,17 @@ function createGameButtons(game: MatchingGame, user: UserDocument): ActionRowBui
         rowCards.forEach(card => {
             const button = new ButtonBuilder()
                 .setCustomId(`card_${card.id}`)
-                .setLabel(card.isMatched ? '✨' : card.isFlipped ? card.emoji : ' ')
                 .setStyle(
                     card.isMatched ? ButtonStyle.Success :
                     card.isFlipped ? ButtonStyle.Primary :
                     ButtonStyle.Secondary
                 )
-                .setDisabled(card.isMatched || card.isFlipped);
-            
-            // Add visual corruption at low sanity
-            if (user.sanity < 40 && !card.isFlipped && !card.isMatched) {
-                if (Math.random() < 0.15) {
-                    button.setEmoji(['❓', '❔', '⁉️', '‼️'][Math.floor(Math.random() * 4)]);
-                }
-            }
+                // Use emoji instead of label for better visibility
+                .setEmoji(card.isMatched ? '✨' : card.isFlipped ? card.emoji : '❔')
+                .setDisabled(card.isMatched || card.isFlipped || 
+                    game.processingMatch || // Use the processing flag to disable buttons
+                    Boolean(game.firstCard && game.secondCard) // Disable all cards while checking pair
+                );
             
             row.addComponents(button);
         });
@@ -147,7 +146,7 @@ export default new SlashCommand ({
                     { name: '😰 Medium (6 pairs)', value: 'medium' },
                     { name: '😱 Hard (8 pairs)', value: 'hard' }
                 )
-        )as SlashCommandBuilder,
+        ) as SlashCommandBuilder,
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
         await interaction.deferReply();
 
@@ -190,6 +189,7 @@ export default new SlashCommand ({
         });
 
         collector.on('collect', async (btnInteraction) => {
+            // Handle cases where someone else clicks the button
             if (btnInteraction.user.id !== interaction.user.id) {
                 await btnInteraction.reply({
                     content: 'These symbols aren\'t meant for you...',
@@ -198,110 +198,145 @@ export default new SlashCommand ({
                 return;
             }
 
-            const cardId = parseInt(btnInteraction.customId.split('_')[1]);
-            const card = game.cards.find(c => c.id === cardId);
-            if (!card || card.isMatched) return;
-
-            // Flip card
-            card.isFlipped = true;
-            
-            if (!game.firstCard) {
-                game.firstCard = card;
-            } else if (!game.secondCard) {
-                game.secondCard = card;
-                game.moves++;
-
-                // Check for match
-                if (game.firstCard.emoji === game.secondCard.emoji) {
-                    game.firstCard.isMatched = true;
-                    game.secondCard.isMatched = true;
-                    game.matches++;
+            try {
+                // Get the card ID from the button
+                const cardId = parseInt(btnInteraction.customId.split('_')[1]);
+                const card = game.cards.find(c => c.id === cardId);
+                
+                // Skip if card is invalid, matched, flipped, or game is processing a match
+                if (!card || card.isMatched || card.isFlipped || game.processingMatch) {
+                    await btnInteraction.deferUpdate();
+                    return;
                 }
 
-                // Reset cards after delay
-                setTimeout(() => {
-                    if (!game.firstCard?.isMatched) game.firstCard!.isFlipped = false;
-                    if (!game.secondCard?.isMatched) game.secondCard!.isFlipped = false;
-                    game.firstCard = null;
-                    game.secondCard = null;
-                }, 1000);
-            }
+                // Flip the card
+                card.isFlipped = true;
 
-            // Check game end conditions
-            const isGameOver = game.matches === game.cards.length / 2 || game.moves >= game.maxMoves;
-            const isSuccess = game.matches === game.cards.length / 2;
-
-            if (isGameOver) {
-                collector.stop();
-
-                // Calculate rewards based on performance
-                const baseReward = PUZZLE_REWARDS[difficulty];
-                const performanceRatio = game.matches / (game.cards.length / 2);
-                const meritChange = isSuccess 
-                    ? Math.round(baseReward.success.meritPoints * (1 + performanceRatio / 2))
-                    : baseReward.failure.meritPoints;
-                const sanityChange = isSuccess
-                    ? baseReward.success.sanity
-                    : Math.round(baseReward.failure.sanity * (1 - performanceRatio));
-
-                // Add suspicion for suspicious patterns
-                let suspicionChange = 0;
-                if (game.moves < game.matches * 2) { // Suspiciously good performance
-                    suspicionChange = Math.min(15, user.suspiciousLevel + 10);
-                }
-
-                // Update user stats
-                await Promise.all([
-                    UserService.updateUserStats(interaction.user.id, {
-                        meritPoints: user.meritPoints + meritChange,
-                        sanity: Math.min(Math.max(user.sanity + sanityChange, 0), 100),
-                        suspiciousLevel: Math.min(user.suspiciousLevel + suspicionChange, 100),
-                        totalGamesPlayed: user.totalGamesPlayed + 1,
-                        totalGamesWon: user.totalGamesWon + (isSuccess ? 1 : 0),
-                        currentStreak: isSuccess ? user.currentStreak + 1 : 0
-                    }),
-                    UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', isSuccess)
-                ]);
-
-                // Final result embed
-                const resultEmbed = new EmbedBuilder()
-                    .setColor(isSuccess ? PRISON_COLORS.success : PRISON_COLORS.danger)
-                    .setTitle(isSuccess ? '🌟 Memory Protocol Complete!' : '💫 Protocol Failed')
-                    .setDescription(
-                        `${isSuccess 
-                            ? 'Your mind proves sharp as steel!'
-                            : 'The symbols fade into darkness...'}\n\n` +
-                        `Matches: ${game.matches}/${game.cards.length/2}\n` +
-                        `Moves Used: ${game.moves}/${game.maxMoves}`
-                    )
-                    .addFields({
-                        name: '📊 Results',
-                        value: 
-                            `Merit Points: ${meritChange >= 0 ? '+' : ''}${meritChange}\n` +
-                            `Sanity: ${sanityChange >= 0 ? '+' : ''}${sanityChange}\n` +
-                            `Streak: ${isSuccess ? user.currentStreak + 1 : '0'}` +
-                            (suspicionChange > 0 ? `\n⚠️ Suspicion: +${suspicionChange}` : '')
-                    })
-                    .setFooter({ 
-                        text: user.sanity < 30 
-                            ? 'T̷h̷e̶ ̷s̶y̵m̷b̴o̷l̶s̷ ̵h̷a̵u̷n̷t̵ ̷y̶o̵u̷.̶.̶.' 
-                            : isSuccess ? 'Your memory grows stronger...' : 'The patterns slip away...' 
+                if (!game.firstCard) {
+                    // First card selected
+                    game.firstCard = card;
+                    await btnInteraction.update({
+                        embeds: [createBoardEmbed(game, user, difficulty)],
+                        components: createGameButtons(game, user)
+                    });
+                } else {
+                    // Second card selected
+                    game.secondCard = card;
+                    game.moves++;
+                    game.processingMatch = true;  // Set the processing flag
+                    
+                    // First, update to show both cards
+                    await btnInteraction.update({
+                        embeds: [createBoardEmbed(game, user, difficulty)],
+                        components: createGameButtons(game, user)
                     });
 
-                await btnInteraction.update({
-                    embeds: [resultEmbed],
-                    components: []
-                });
-            } else {
-                // Update game display
-                await btnInteraction.update({
-                    embeds: [createBoardEmbed(game, user, difficulty)],
-                    components: createGameButtons(game, user)
-                });
+                    // Wait a moment to let player see the cards
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    // Check if cards match
+                    if (game.firstCard.emoji === game.secondCard.emoji) {
+                        game.firstCard.isMatched = true;
+                        game.secondCard.isMatched = true;
+                        game.matches++;
+                    } else {
+                        game.firstCard.isFlipped = false;
+                        game.secondCard.isFlipped = false;
+                    }
+
+                    // Reset card selection
+                    game.firstCard = null;
+                    game.secondCard = null;
+                    
+                    // Check if game is over
+                    const isGameOver = game.matches === game.cards.length / 2 || game.moves >= game.maxMoves;
+                    const isSuccess = game.matches === game.cards.length / 2;
+                    
+                    if (isGameOver) {
+                        collector.stop();
+
+                        // Calculate rewards based on performance
+                        const baseReward = PUZZLE_REWARDS[difficulty];
+                        const performanceRatio = game.matches / (game.cards.length / 2);
+                        const meritChange = isSuccess 
+                            ? Math.round(baseReward.success.meritPoints * (1 + performanceRatio / 2))
+                            : baseReward.failure.meritPoints;
+                        const sanityChange = isSuccess
+                            ? baseReward.success.sanity
+                            : Math.round(baseReward.failure.sanity * (1 - performanceRatio));
+
+                        // Add suspicion for suspicious patterns
+                        let suspicionChange = 0;
+                        if (game.moves < game.matches * 2) { // Suspiciously good performance
+                            suspicionChange = Math.min(15, 10);
+                        }
+
+                        // Update user stats
+                        await Promise.all([
+                            UserService.updateUserStats(interaction.user.id, {
+                                meritPoints: user.meritPoints + meritChange,
+                                sanity: Math.min(Math.max(user.sanity + sanityChange, 0), 100),
+                                suspiciousLevel: Math.min(user.suspiciousLevel + suspicionChange, 100),
+                                totalGamesPlayed: user.totalGamesPlayed + 1,
+                                totalGamesWon: user.totalGamesWon + (isSuccess ? 1 : 0),
+                                currentStreak: isSuccess ? user.currentStreak + 1 : 0
+                            }),
+                            UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', isSuccess)
+                        ]);
+
+                        // Final result embed
+                        const resultEmbed = new EmbedBuilder()
+                            .setColor(isSuccess ? PRISON_COLORS.success : PRISON_COLORS.danger)
+                            .setTitle(isSuccess ? '🌟 Memory Protocol Complete!' : '💫 Protocol Failed')
+                            .setDescription(
+                                `${isSuccess 
+                                    ? 'Your mind proves sharp as steel!'
+                                    : 'The symbols fade into darkness...'}\n\n` +
+                                `Matches: ${game.matches}/${game.cards.length/2}\n` +
+                                `Moves Used: ${game.moves}/${game.maxMoves}`
+                            )
+                            .addFields({
+                                name: '📊 Results',
+                                value: 
+                                    `Merit Points: ${meritChange >= 0 ? '+' : ''}${meritChange}\n` +
+                                    `Sanity: ${sanityChange >= 0 ? '+' : ''}${sanityChange}\n` +
+                                    `Streak: ${isSuccess ? user.currentStreak + 1 : '0'}` +
+                                    (suspicionChange > 0 ? `\n⚠️ Suspicion: +${suspicionChange}` : '')
+                            })
+                            .setFooter({ 
+                                text: user.sanity < 30 
+                                    ? 'T̷h̷e̶ ̷s̶y̵m̷b̴o̷l̶s̷ ̵h̷a̵u̷n̷t̵ ̷y̶o̵u̷.̶.̶.' 
+                                    : isSuccess ? 'Your memory grows stronger...' : 'The patterns slip away...' 
+                            });
+
+                        // Edit original interaction message since the collector is stopping
+                        await interaction.editReply({
+                            embeds: [resultEmbed],
+                            components: []
+                        });
+                    } else {
+                        // Game continues - update the board
+                        game.processingMatch = false;  // Reset the processing flag
+                        
+                        // Use the original interaction to edit the message
+                        await interaction.editReply({
+                            embeds: [createBoardEmbed(game, user, difficulty)],
+                            components: createGameButtons(game, user)
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error handling button interaction:', error);
+                // Try to acknowledge the interaction to prevent Discord API errors
+                try {
+                    await btnInteraction.deferUpdate();
+                } catch (e) {
+                    // Ignore if this also fails
+                }
             }
         });
 
-        collector.on('end', (collected, reason) => {
+        collector.on('end', async (collected, reason) => {
             if (reason === 'time') {
                 const timeoutEmbed = new EmbedBuilder()
                     .setColor(PRISON_COLORS.warning)
@@ -312,13 +347,17 @@ export default new SlashCommand ({
                     )
                     .setFooter({ text: 'Try another round with /matching' });
 
-                interaction.editReply({
-                    embeds: [timeoutEmbed],
-                    components: []
-                });
+                try {
+                    await interaction.editReply({
+                        embeds: [timeoutEmbed],
+                        components: []
+                    });
+                } catch (error) {
+                    console.error('Error updating timeout message:', error);
+                }
 
                 // Penalize for timeout
-                UserService.updateUserStats(interaction.user.id, {
+                await UserService.updateUserStats(interaction.user.id, {
                     sanity: Math.max(user.sanity - 2, 0),
                     currentStreak: 0
                 });

@@ -9,7 +9,8 @@ import {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
-    ComponentType
+    ComponentType,
+    ModalSubmitInteraction
 } from 'discord.js';
 import { User, UserDocument } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
@@ -73,7 +74,7 @@ export default new SlashCommand({
                     { name: '😌 Easy (4 steps)', value: 'easy' },
                     { name: '😰 Medium (6 steps)', value: 'medium' },
                     { name: '😱 Hard (8 steps)', value: 'hard' }
-                ))as SlashCommandBuilder,
+                )) as SlashCommandBuilder,
 
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
         await interaction.deferReply();
@@ -126,189 +127,256 @@ export default new SlashCommand({
             .setFooter({ text: user.sanity < 50 ? 'T̷h̷e̶ ̷w̶a̵l̷l̴s̷ ̶s̷h̵i̷f̷t̵.̷.̶.' : 'Remember the pattern...' });
 
         // Send initial message with sequence
-        await interaction.editReply({ embeds: [initialEmbed] });
+        const message = await interaction.editReply({ embeds: [initialEmbed] });
 
-        // Wait 5 seconds (or less if sanity is low)
+        // Wait for view time (adjusted based on sanity)
         const viewTime = Math.max(2000, Math.min(5000, user.sanity * 50));
         await new Promise(resolve => setTimeout(resolve, viewTime));
 
-        // Create input modal
-        const modal = new ModalBuilder()
-            .setCustomId('sequence_input')
-            .setTitle('Enter the Sequence')
-            .addComponents(
-                new ActionRowBuilder<TextInputBuilder>().addComponents(
-                    new TextInputBuilder()
-                        .setCustomId('sequence_input')
-                        .setLabel('Type the directions (up/down/left/right)')
-                        .setPlaceholder('Example: up right down left')
-                        .setStyle(TextInputStyle.Short)
-                        .setRequired(true)
-                )
+        // Update message to prompt for input
+        const promptEmbed = new EmbedBuilder()
+            .setColor(PRISON_COLORS.primary)
+            .setTitle('🌀 Enter the Sequence')
+            .setDescription(
+                user.sanity < 40 ?
+                'T̷h̶e̷ ̵p̷a̴t̵h̷ ̵t̶w̷i̸s̷t̴s̷ ̵i̸n̵ ̷y̵o̷u̶r̵ ̴m̶i̶n̸d̸.̶.̵.' :
+                'The sequence vanishes... What path did you see?'
             );
 
-        // Show modal for user input
-        await interaction.editReply({
-            embeds: [new EmbedBuilder()
-                .setColor(PRISON_COLORS.primary)
-                .setTitle('🌀 Enter the Sequence')
-                .setDescription(
-                    user.sanity < 40 ?
-                    'T̷h̶e̷ ̵p̷a̴t̵h̷ ̵t̶w̷i̸s̷t̴s̷ ̵i̸n̵ ̷y̵o̷u̶r̵ ̴m̶i̶n̶d̸.̶.̵.' :
-                    'The sequence vanishes... What path did you see?'
-                )
-            ],
-            components: []
-        });
-
-        try {
-            await handleModalSubmission(interaction, sequence, user, game);
-        } catch (error) {
-            console.error('Error in tunnel game:', error);
-            await interaction.followUp({ 
-                content: 'An error occurred while processing your sequence. Please try again.',
-                ephemeral: true 
-            });
-        }
-    }
-});
-
-async function handleModalSubmission(
-  interaction: ChatInputCommandInteraction, 
-  sequence: string[], 
-  user: UserDocument,
-  game: TunnelGame
-): Promise<void> {
-  const modal = new ModalBuilder()
-      .setCustomId('sequence_input')
-      .setTitle('Enter the Sequence')
-      .addComponents(
-          new ActionRowBuilder<TextInputBuilder>()
-              .addComponents(
-                  new TextInputBuilder()
-                      .setCustomId('sequence_answer')
-                      .setLabel('Enter the sequence of directions')
-                      .setPlaceholder('Example: up right down left')
-                      .setStyle(TextInputStyle.Short)
-                      .setRequired(true)
-                      .setMinLength(2)
-                      .setMaxLength(50)
-              )
-      );
-
-  const submission = await interaction.showModal(modal).then(() =>
-      interaction.awaitModalSubmit({
-          time: 60000,
-          filter: i => i.customId === 'sequence_input' && i.user.id === interaction.user.id
-      })
-  ).catch(() => null);
-
-  if (!submission) {
-      await interaction.followUp({ 
-          content: 'You did not submit a sequence in time.',
-          ephemeral: true 
-      });
-      return;
-  }
-
-  const answer = submission.fields.getTextInputValue('sequence_answer')
-      .trim().toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ');
-
-  // Rest of the validation and scoring logic...
-  const userMoves = answer.split(' ');
-  
-  // Validate input format
-  const validDirections = ['up', 'down', 'left', 'right'];
-  const isValidInput = userMoves.every(move => validDirections.includes(move));
-
-  if (!isValidInput) {
-      await submission.reply({
-          content: 'Invalid input! Please use only: up, down, left, right (separated by spaces)',
-          ephemeral: true
-      });
-      return;
-  }
-
-  // Continue with the rest of your existing logic for scoring and rewards
-  const correctMoves = sequence;
-  let correctCount = 0;
-
-  // Calculate accuracy
-  for (let i = 0; i < correctMoves.length; i++) {
-      if (userMoves[i] === correctMoves[i]) {
-          correctCount++;
-      }
-  }
-  const matchRatio = correctCount / sequence.length;
-    const scorePercentage = Math.round(matchRatio * 100);
-    
-    // Calculate rewards based on performance and difficulty
-    const rewards = PUZZLE_REWARDS[game.difficulty];
-    const isSuccess = scorePercentage >= 70;
-    
-    const meritChange = isSuccess ? rewards.success.meritPoints : rewards.failure.meritPoints;
-    const sanityChange = isSuccess ? rewards.success.sanity : rewards.failure.sanity;
-    
-    // Add suspicion for very poor performance
-    const suspicionChange = scorePercentage < 30 ? Math.min(10, user.suspiciousLevel + 5) : 0;
-
-    // Update user stats
-    await Promise.all([
-        UserService.updateUserStats(interaction.user.id, {
-            meritPoints: user.meritPoints + meritChange,
-            sanity: Math.min(Math.max(user.sanity + sanityChange, 0), 100),
-            suspiciousLevel: Math.min(user.suspiciousLevel + suspicionChange, 100),
-            totalGamesPlayed: user.totalGamesPlayed + 1,
-            totalGamesWon: user.totalGamesWon + (isSuccess ? 1 : 0),
-            currentStreak: isSuccess ? user.currentStreak + 1 : 0
-        }),
-        UserService.updatePuzzleProgress(interaction.user.id, 'tunnel1', isSuccess)
-    ]);
-
-    // Create result embed
-    const resultEmbed = new EmbedBuilder()
-        .setColor(isSuccess ? PRISON_COLORS.success : PRISON_COLORS.danger)
-        .setTitle(isSuccess ? '🌟 Tunnel Navigated!' : '💫 Lost in the Maze')
-        .setDescription(
-            `${isSuccess 
-                ? 'You found your way through the digital labyrinth!'
-                : 'The path proved too treacherous...'}\n\n` +
-            `Correct Sequence: ${formatSequence(correctMoves, 100)}\n` +
-            `Your Sequence: ${formatSequence(userMoves, user.sanity)}\n` +
-            `Accuracy: ${scorePercentage}%`
-        )
-        .addFields({
-            name: '📊 Results',
-            value: 
-                `Merit Points: ${meritChange >= 0 ? '+' : ''}${meritChange}\n` +
-                `Sanity: ${sanityChange >= 0 ? '+' : ''}${sanityChange}\n` +
-                `Streak: ${isSuccess ? user.currentStreak + 1 : '0'}` +
-                (suspicionChange > 0 ? `\n⚠️ Suspicion: +${suspicionChange}` : '')
-        })
-        .setFooter({ 
-            text: user.sanity < 30 
-                ? 'T̷h̷e̶ ̷m̶a̵z̷e̴ ̷n̶e̷v̵e̷r̵ ̷e̶n̷d̵s̶.̷.̶.' 
-                : isSuccess ? 'The path becomes clearer...' : 'The tunnels shift and change...' 
-        });
-
-    // Add retry button if attempts remain
-    const components: ActionRowBuilder<ButtonBuilder>[] = [];
-    if (game.attempts < game.maxAttempts && !isSuccess) {
-        const row = new ActionRowBuilder<ButtonBuilder>()
+        // Create button to show modal
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>()
             .addComponents(
                 new ButtonBuilder()
-                    .setCustomId('retry_tunnel')
-                    .setLabel(`Retry (${game.maxAttempts - game.attempts} left)`)
+                    .setCustomId('show_sequence_modal')
+                    .setLabel('Enter Sequence')
                     .setStyle(ButtonStyle.Primary)
-                    .setDisabled(user.sanity < 20)
             );
-        components.push(row);
+
+        await interaction.editReply({
+            embeds: [promptEmbed],
+            components: [buttonRow]
+        });
+
+        // Create collector for the button
+        const collector = message.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 60000, // 1 minute timeout
+            filter: i => i.user.id === interaction.user.id
+        });
+
+        collector.on('collect', async (i) => {
+            if (i.customId === 'show_sequence_modal') {
+                const modal = new ModalBuilder()
+                    .setCustomId('sequence_input')
+                    .setTitle('Enter the Sequence')
+                    .addComponents(
+                        new ActionRowBuilder<TextInputBuilder>()
+                            .addComponents(
+                                new TextInputBuilder()
+                                    .setCustomId('sequence_answer')
+                                    .setLabel('Type the directions')
+                                    .setPlaceholder('Example: up right down left')
+                                    .setStyle(TextInputStyle.Short)
+                                    .setRequired(true)
+                                    .setMinLength(2)
+                                    .setMaxLength(50)
+                            )
+                    );
+                
+                await i.showModal(modal);
+            } else if (i.customId === 'retry_tunnel') {
+                // Handle retry
+                game.attempts++;
+                collector.stop();
+                
+                // Show sequence again
+                const retryEmbed = new EmbedBuilder()
+                    .setColor(user.sanity < 30 ? PRISON_COLORS.danger : PRISON_COLORS.primary)
+                    .setTitle('🌀 The Digital Tunnel - Retry')
+                    .setDescription(
+                        `${storylineData.flavorText}\n\n` +
+                        (user.sanity < 50 ? getRandomGlitchMessage() + '\n\n' : '') +
+                        '**Memorize the sequence:**\n' +
+                        formatSequence(sequence, user.sanity)
+                    )
+                    .addFields(
+                        { name: '🎯 Difficulty', value: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`, inline: true },
+                        { name: '💫 Attempts', value: `${game.maxAttempts - game.attempts}/${game.maxAttempts}`, inline: true },
+                        { name: '🧠 Sanity', value: `${createProgressBar(user.sanity, 100)} ${user.sanity}%`, inline: true }
+                    )
+                    .setFooter({ text: user.sanity < 50 ? 'T̷h̷e̶ ̷w̶a̵l̷l̴s̷ ̶s̷h̵i̷f̷t̵.̷.̶.' : 'Remember the pattern...' });
+                
+                await i.update({ embeds: [retryEmbed], components: [] });
+                
+                // Wait for view time
+                await new Promise(resolve => setTimeout(resolve, viewTime));
+                
+                // Show button to enter sequence again
+                await interaction.editReply({
+                    embeds: [promptEmbed],
+                    components: [buttonRow]
+                });
+                
+                // Set up a new collector
+                const newCollector = message.createMessageComponentCollector({
+                    componentType: ComponentType.Button,
+                    time: 60000,
+                    filter: i => i.user.id === interaction.user.id
+                });
+                
+                newCollector.on('collect', async (i) => {
+                    if (i.customId === 'show_sequence_modal') {
+                        const modal = new ModalBuilder()
+                            .setCustomId('sequence_input')
+                            .setTitle('Enter the Sequence')
+                            .addComponents(
+                                new ActionRowBuilder<TextInputBuilder>()
+                                    .addComponents(
+                                        new TextInputBuilder()
+                                            .setCustomId('sequence_answer')
+                                            .setLabel('Type the directions')
+                                            .setPlaceholder('Example: up right down left')
+                                            .setStyle(TextInputStyle.Short)
+                                            .setRequired(true)
+                                            .setMinLength(2)
+                                            .setMaxLength(50)
+                                    )
+                            );
+                        
+                        await i.showModal(modal);
+                    }
+                });
+                
+                newCollector.on('end', () => {
+                    interaction.editReply({
+                        components: []
+                    }).catch(console.error);
+                });
+            }
+        });
+
+        collector.on('end', () => {
+            // Remove button when collector ends without retry
+            interaction.editReply({
+                components: []
+            }).catch(console.error);
+        });
+
+        // Watch for modal submissions
+        const modalFilter = (i: ModalSubmitInteraction) => i.customId === 'sequence_input' && i.user.id === interaction.user.id;
+        
+        interaction.awaitModalSubmit({ filter: modalFilter, time: 120000 })
+            .then(async submission => {
+                submission.deferUpdate();
+                // Process the user's answer
+                const answer = submission.fields.getTextInputValue('sequence_answer')
+                    .trim().toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ');
+                
+                // Validate input format
+                const userMoves = answer.split(' ');
+                const validDirections = ['up', 'down', 'left', 'right'];
+                const isValidInput = userMoves.every(move => validDirections.includes(move));
+                
+                if (!isValidInput) {
+                    await submission.reply({
+                        content: 'Invalid input! Please use only: up, down, left, right (separated by spaces)',
+                        ephemeral: true
+                    });
+                    return;
+                }
+                
+                // Calculate accuracy
+                const correctMoves = sequence;
+                let correctCount = 0;
+                
+                for (let i = 0; i < correctMoves.length; i++) {
+                    if (userMoves[i] === correctMoves[i]) {
+                        correctCount++;
+                    }
+                }
+                
+                const matchRatio = correctCount / sequence.length;
+                const scorePercentage = Math.round(matchRatio * 100);
+                
+                // Calculate rewards
+                const rewards = PUZZLE_REWARDS[game.difficulty];
+                const isSuccess = scorePercentage >= 70;
+                
+                const meritChange = isSuccess ? rewards.success.meritPoints : rewards.failure.meritPoints;
+                const sanityChange = isSuccess ? rewards.success.sanity : rewards.failure.sanity;
+                
+                // Add suspicion for very poor performance
+                const suspicionChange = scorePercentage < 30 ? 5 : 0;
+                
+                // Update user stats
+                await Promise.all([
+                    UserService.updateUserStats(interaction.user.id, {
+                        meritPoints: user.meritPoints + meritChange,
+                        sanity: Math.min(Math.max(user.sanity + sanityChange, 0), 100),
+                        suspiciousLevel: Math.min(user.suspiciousLevel + suspicionChange, 100),
+                        totalGamesPlayed: user.totalGamesPlayed + 1,
+                        totalGamesWon: user.totalGamesWon + (isSuccess ? 1 : 0),
+                        currentStreak: isSuccess ? user.currentStreak + 1 : 0
+                    }),
+                    UserService.updatePuzzleProgress(interaction.user.id, 'tunnel1', isSuccess)
+                ]);
+                
+                // Create result embed
+                const resultEmbed = new EmbedBuilder()
+                    .setColor(isSuccess ? PRISON_COLORS.success : PRISON_COLORS.danger)
+                    .setTitle(isSuccess ? '🌟 Tunnel Navigated!' : '💫 Lost in the Maze')
+                    .setDescription(
+                        `${isSuccess 
+                            ? 'You found your way through the digital labyrinth!'
+                            : 'The path proved too treacherous...'}\n\n` +
+                        `Correct Sequence: ${formatSequence(correctMoves, 100)}\n` +
+                        `Your Sequence: ${formatSequence(userMoves.slice(0, correctMoves.length), user.sanity)}\n` +
+                        `Accuracy: ${scorePercentage}%`
+                    )
+                    .addFields({
+                        name: '📊 Results',
+                        value: 
+                            `Merit Points: ${meritChange >= 0 ? '+' : ''}${meritChange}\n` +
+                            `Sanity: ${sanityChange >= 0 ? '+' : ''}${sanityChange}\n` +
+                            `Streak: ${isSuccess ? user.currentStreak + 1 : '0'}` +
+                            (suspicionChange > 0 ? `\n⚠️ Suspicion: +${suspicionChange}` : '')
+                    })
+                    .setFooter({ 
+                        text: user.sanity < 30 
+                            ? 'T̷h̷e̶ ̷m̶a̵z̷e̴ ̷n̶e̷v̵e̷r̵ ̷e̶n̷d̵s̶.̷.̶.' 
+                            : isSuccess ? 'The path becomes clearer...' : 'The tunnels shift and change...' 
+                    });
+                
+                // Add retry button if attempts remain
+                const components: ActionRowBuilder<ButtonBuilder>[] = [];
+                if (!isSuccess && game.attempts < game.maxAttempts - 1) {
+                    const row = new ActionRowBuilder<ButtonBuilder>()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId('retry_tunnel')
+                                .setLabel(`Retry (${game.maxAttempts - game.attempts - 1} left)`)
+                                .setStyle(ButtonStyle.Primary)
+                                .setDisabled(user.sanity < 20)
+                        );
+                    components.push(row);
+                }
+                
+                await submission.reply({
+                    embeds: [resultEmbed],
+                    components: components
+                });
+                
+                collector.stop();
+            })
+            .catch(() => {
+                // Handle timeout or error
+                interaction.followUp({
+                    content: 'You did not submit a sequence in time or an error occurred.',
+                    ephemeral: true
+                }).catch(console.error);
+            });
     }
-  await submission.reply({
-      embeds: [resultEmbed],
-      components: components
-  });
-}
+});
 
 function getRandomGlitchMessage(): string {
     return SANITY_EFFECTS.glitchMessages[
