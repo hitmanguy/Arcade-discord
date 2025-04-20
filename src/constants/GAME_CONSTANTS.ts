@@ -51,7 +51,8 @@ export const STORYLINE = {
         description: "Simple riddles and puzzles to test your mental acuity. The guards are watching...",
         flavorText: "The first test seems simple enough, but something feels off about this place...",
         slash: "Use ./puzzle to play",
-        access: "unlocked"
+        access: "unlocked",
+        merit: 0
     },
     tunnel1: {
         name: "🚇 The Tunnel",
@@ -59,6 +60,7 @@ export const STORYLINE = {
         flavorText: "The deeper you go, the more the walls seem to shift and change...",
         slash: "Use ./tunnel to play",
         access: "acquire 50 merits point to unlock",
+        merit: 50
     },
     matchingpairs: {
         name: "🎴 Memory Test",
@@ -66,6 +68,7 @@ export const STORYLINE = {
         flavorText: "The symbols dance before your eyes. Are they changing, or is it just your imagination?",
         slash: "Use ./matching to play",
         access: "acquire 100 merits point to unlock",
+        merit: 100
     },
     UNO: {
         name: "🃏 Digital Card Protocol",
@@ -73,6 +76,7 @@ export const STORYLINE = {
         flavorText: "Even a simple game of cards feels sinister in this place...",
         slash: "Use ./uno to play",
         access: "acquire 150 merits point to unlock",
+        merit: 150
     },
     "numbers-game-command": {
         name: "🔢 The Numbers Protocol",
@@ -80,6 +84,7 @@ export const STORYLINE = {
         flavorText: "The true nature of this prison begins to reveal itself...",
         slash: "Use ./number-game create/join/rule to play",
         access: "acquire 200 merits point to unlock",
+        merit: 200
     }
 };
 

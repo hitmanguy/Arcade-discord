@@ -48,19 +48,14 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
         .setDescription('Display the rules of King of Diamonds')
     )as SlashCommandBuilder,
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
          const user = await User.findOne({ discordId: interaction.user.id });
                 if (!user) {
-                    await interaction.editReply({
+                    await interaction.reply({
                         content: 'You must be registered to use this command. Use `/register` first.',
+                        ephemeral: true
                     });
                     return;
                 }
-                const merit = user.meritPoints;
-        if(merit<200){
-            await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
-            return;
-        }
 
         const requiredPuzzles = ['puzzles1', 'tunnel1', 'matchingpairs', 'UNO'];
         const completedPuzzles = user.puzzleProgress.filter(p => requiredPuzzles.includes(p.puzzleId) && p.completed);
@@ -112,8 +107,9 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
   
     // Check if there's already an active game in this channel
     if (activeGames.has(channelId)) {
-      await interaction.editReply({
+      await interaction.reply({
         content: 'There is already an active King of Diamonds game in this channel! Use `/king-of-diamonds join` to join it.',
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -131,8 +127,9 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     });
   
     if (!success) {
-      await interaction.editReply({
+      await interaction.reply({
         content: 'Failed to create the game. Please try again.',
+        flags: [MessageFlags.Ephemeral]
       });
       activeGames.delete(channelId);
       return;
@@ -162,11 +159,21 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
       )
       .setFooter({ text: 'The game will start when the host clicks "Start Game"' });
   
-    const res = await interaction.reply({
-      embeds: [embed],
-      components: [row],
-    });
-    const response = await res.fetch();
+      let response;
+      if (!interaction.replied && !interaction.deferred) {
+        response = await interaction.reply({
+          embeds: [embed],
+          components: [row],
+          fetchReply: true
+        });
+      } else {
+        response = await interaction.followUp({
+          embeds: [embed],
+          components: [row],
+          fetchReply: true
+        });
+      }
+  
     // Create a collector for the join button
     const collector = response.createMessageComponentCollector({
       componentType: ComponentType.Button,
@@ -225,8 +232,9 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     
     // Check if player is already in the game
     if (game.hasPlayer(interaction.user.id)) {
-      await interaction.editReply({
+      await interaction.reply({
         content: 'You have already joined this game!',
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -239,8 +247,9 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     });
   
     if (!success) {
-      await interaction.editReply({
+      await interaction.reply({
         content: 'Failed to join the game. The game might be full.',
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -253,26 +262,33 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
       { name: 'Minimum Players', value: '3', inline: true }
     );
   
-    await interaction.reply({
-      embeds: [embed]
-    });
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.update({
+        embeds: [embed]
+      });
+    } else {
+      await interaction.followUp({
+        embeds: [embed]
+      });
+    }
   }
   
   async function handleGameJoin(interaction: CommandInteraction) {
-    await interaction.deferReply({flags: [MessageFlags.Ephemeral]});
     const channelId = interaction.channelId;
     const game = activeGames.get(channelId);
   
     if (!game) {
-      await interaction.editReply({
+      await interaction.reply({
         content: 'There is no active King of Diamonds game in this channel! Use `/king-of-diamonds start` to start one.',
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
   
     if (game.hasPlayer(interaction.user.id)) {
-      await interaction.editReply({
+      await interaction.reply({
         content: 'You have already joined this game!',
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -285,14 +301,16 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     });
   
     if (!success) {
-      await interaction.editReply({
+      await interaction.reply({
         content: 'Failed to join the game. The game might be full or already started.',
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
   
-    await interaction.editReply({
+    await interaction.reply({
       content: `You've joined the King of Diamonds game! Wait for the host to start the game.`,
+      flags: [MessageFlags.Ephemeral]
     });
   
     // Update the game embed if possible
@@ -353,11 +371,11 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
     channelId: string
 ) {
     await game.startRound();
-    const cur_rule = game.getRules();
+    
     const embed = new EmbedBuilder()
         .setColor('#FF0000')
         .setTitle(`King of Diamonds - Round ${game.getRound()}`)
-        .setDescription(`Make your selection!\nRules:${cur_rule}`)
+        .setDescription('Make your selection!')
         .addFields(
             { name: 'Time Remaining', value: '30 seconds', inline: true },
             { name: 'Players', value: game.getActivePlayers().map(p => `${p.name} (${p.score})`).join('\n'), inline: true }
@@ -679,10 +697,18 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
       const target = game.getPlayer(targetId);
 
       if (success && target) {
-        await i.update({
-          content: `Successfully reduced ${target.name}'s extra life! They now have ${target.extraLives} lives remaining.`,
-          components: []
-        });
+        if (!i.replied && !i.deferred) {
+          await i.update({
+            content: `Successfully reduced ${target.name}'s extra life! They now have ${target.extraLives} lives remaining.`,
+            components: []
+          });
+        } else {
+          await i.followUp({
+            content: `Successfully reduced ${target.name}'s extra life! They now have ${target.extraLives} lives remaining.`,
+            components: [],
+            ephemeral: true
+          });
+        }
       } else {
         await i.update({
           content: 'Failed to reduce player\'s life. They might not have any extra lives left.',
@@ -783,10 +809,20 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
           });
         }
       } catch (error) {
-        await i.editReply({
-          content: 'Team formation timed out.',
-          components: []
-        });
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: 'The game setup has timed out.',
+            embeds: [],
+            components: [],
+            ephemeral: true
+          });
+        } else {
+          await interaction.editReply({
+            content: 'The game setup has timed out.',
+            embeds: [],
+            components: []
+          });
+        }
       }
     });
   }
@@ -797,10 +833,20 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     const game = activeGames.get(channelId);
     
     if (!game) {
-      await interaction.reply({
-        content: 'This game has ended or does not exist anymore.',
-        flags: MessageFlags.Ephemeral
-      });
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: 'The game has ended or doesnt exist anymore.',
+          embeds: [],
+          components: [],
+          ephemeral: true
+        });
+      } else {
+        await interaction.editReply({
+          content: 'The game has ended or doesnt exist anymore.',
+          embeds: [],
+          components: []
+        });
+      }
       return;
     }
     
