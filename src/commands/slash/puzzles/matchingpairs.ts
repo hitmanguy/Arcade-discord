@@ -6,7 +6,9 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ComponentType
+    ComponentType,
+    MessageFlags,
+    ColorResolvable
 } from 'discord.js';
 import { User, UserDocument } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
@@ -156,6 +158,35 @@ export default new SlashCommand ({
             return;
         }
 
+        const requiredPuzzles = ['puzzles1', 'tunnel1'];
+        const completedPuzzles = user.puzzleProgress.filter(p => requiredPuzzles.includes(p.puzzleId) && p.completed);
+        
+        // Add type guard for storyline entries
+        function isStorylineEntry(value: any): value is { name: string; description: string; flavorText: string } {
+            return value && typeof value === 'object' && 'name' in value;
+        }
+
+        // Update the progress display with proper type checking
+        if (completedPuzzles.length < requiredPuzzles.length) {
+            await interaction.reply({ 
+                embeds: [new EmbedBuilder()
+                    .setColor(getColorFromPrisonColor('danger'))
+                    .setTitle('⚠️ Access Denied')
+                    .setDescription('The Judas Protocol requires mastery of simpler trials first.')
+                    .addFields({
+                        name: 'Required Trials',
+                        value: requiredPuzzles.map(id => {
+                            const completed = user.puzzleProgress.find(p => p.puzzleId === id)?.completed;
+                            const storylineEntry = STORYLINE[id as keyof typeof STORYLINE];
+                            const name = isStorylineEntry(storylineEntry) ? storylineEntry.name : id;
+                            return `${completed ? '✅' : '❌'} ${name}`;
+                        }).join('\n')
+                    })],
+                ephemeral: true
+            });
+            return;
+        }
+
         // Check for isolation or high suspicion
         if (user.isInIsolation || user.suspiciousLevel >= 80) {
             const embed = new EmbedBuilder()
@@ -193,7 +224,7 @@ export default new SlashCommand ({
             if (btnInteraction.user.id !== interaction.user.id) {
                 await btnInteraction.reply({
                     content: 'These symbols aren\'t meant for you...',
-                    ephemeral: true
+                    flags: [MessageFlags.Ephemeral]
                 });
                 return;
             }
@@ -370,4 +401,8 @@ function getRandomGlitchMessage(): string {
     return SANITY_EFFECTS.glitchMessages[
         Math.floor(Math.random() * SANITY_EFFECTS.glitchMessages.length)
     ];
+}
+
+function getColorFromPrisonColor(colorKey: keyof typeof PRISON_COLORS): ColorResolvable {
+    return PRISON_COLORS[colorKey] as ColorResolvable;
 }

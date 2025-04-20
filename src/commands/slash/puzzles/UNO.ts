@@ -14,7 +14,7 @@ import {
 } from 'discord.js';
 import { User } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
-import { PRISON_COLORS, PUZZLE_REWARDS, SANITY_EFFECTS, createProgressBar } from '../../../constants/GAME_CONSTANTS';
+import { PRISON_COLORS, PUZZLE_REWARDS, SANITY_EFFECTS, STORYLINE, createProgressBar } from '../../../constants/GAME_CONSTANTS';
 
 const colours = ['Red', 'Green', 'Yellow', 'Blue'];
 const values = [
@@ -108,7 +108,7 @@ export default new SlashCommand({
     .setDescription('Play a quick 4-card UNO match vs bot!'),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
     // Fetch user data
     const user = await User.findOne({ discordId: interaction.user.id });
@@ -116,6 +116,35 @@ export default new SlashCommand({
       await interaction.editReply('You need to register first! Use `/register` to begin your journey.');
       return;
     }
+
+          const requiredPuzzles = ['puzzles1', 'tunnel1', 'matchingpairs'];
+        const completedPuzzles = user.puzzleProgress.filter(p => requiredPuzzles.includes(p.puzzleId) && p.completed);
+        
+        // Add type guard for storyline entries
+        function isStorylineEntry(value: any): value is { name: string; description: string; flavorText: string } {
+            return value && typeof value === 'object' && 'name' in value;
+        }
+
+        // Update the progress display with proper type checking
+        if (completedPuzzles.length < requiredPuzzles.length) {
+            await interaction.reply({ 
+                embeds: [new EmbedBuilder()
+                    .setColor(getColorFromPrisonColor('danger'))
+                    .setTitle('⚠️ Access Denied')
+                    .setDescription('The Judas Protocol requires mastery of simpler trials first.')
+                    .addFields({
+                        name: 'Required Trials',
+                        value: requiredPuzzles.map(id => {
+                            const completed = user.puzzleProgress.find(p => p.puzzleId === id)?.completed;
+                            const storylineEntry = STORYLINE[id as keyof typeof STORYLINE];
+                            const name = isStorylineEntry(storylineEntry) ? storylineEntry.name : id;
+                            return `${completed ? '✅' : '❌'} ${name}`;
+                        }).join('\n')
+                    })],
+                ephemeral: true
+            });
+            return;
+        }
 
     // Check for isolation or high suspicion
     if (user.isInIsolation || user.suspiciousLevel >= 80) {
@@ -182,6 +211,7 @@ export default new SlashCommand({
           totalGamesWon: user.totalGamesWon + 1,
           currentStreak: user.currentStreak + 1
         });
+        await UserService.updatePuzzleProgress(interaction.user.id, 'UNO', true);
         
         const winEmbed = new EmbedBuilder()
           .setColor(PRISON_COLORS.success)
@@ -209,6 +239,7 @@ export default new SlashCommand({
           totalGamesPlayed: user.totalGamesPlayed + 1,
           currentStreak: 0
         });
+        await UserService.updatePuzzleProgress(interaction.user.id, 'UNO', false);
         
         const loseEmbed = new EmbedBuilder()
           .setColor(PRISON_COLORS.danger)
@@ -257,9 +288,9 @@ export default new SlashCommand({
           )
         );
 
-        await interaction.editReply({
+        const response = await interaction.editReply({
           embeds: [createGameEmbed()],
-          components: [row],
+          components: [row]
         });
 
         const collector = interaction.channel?.createMessageComponentCollector({
@@ -270,7 +301,7 @@ export default new SlashCommand({
 
         collector?.on('collect', async (btnInteraction) => {
           if (btnInteraction.user.id !== interaction.user.id) {
-            return btnInteraction.reply({ content: 'This is not your game!', ephemeral: true });
+            return btnInteraction.reply({ content: 'This is not your game!', flags: [MessageFlags.Ephemeral] });
           }
 
           const chosen = btnInteraction.customId.split(':')[2];
@@ -480,7 +511,7 @@ export default new SlashCommand({
           // Handle Skip or Reverse
           if (chosen.includes('Skip') || chosen.includes('Reverse')) {
             botPlayMessage += user.sanity < 40 ? 
-              corruptText(`\n⚠️ Y̴o̶u̸r̵ ̵t̸u̸r̵n̸ ̸i̵s̴ ̷s̴k̴i̵p̸p̶e̷d̶!`) : 
+              corruptText(`\n⚠️ Y̴o̶u̸r̵ ̵t̸u̵r̸n̸ ̸i̵s̴ ̷s̴k̴i̵p̸p̶e̷d̶!`) : 
               `\n⚠️ Your turn is skipped!`;
             isPlayerTurn = false;
           } else {
@@ -523,3 +554,8 @@ export default new SlashCommand({
     setTimeout(playTurn, 1000);
   },
 });
+
+function getColorFromPrisonColor(colorKey: keyof typeof PRISON_COLORS): ColorResolvable {
+  return PRISON_COLORS[colorKey] as ColorResolvable;
+}
+
