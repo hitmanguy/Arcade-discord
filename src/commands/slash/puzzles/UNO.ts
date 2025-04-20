@@ -124,11 +124,11 @@ export default new SlashCommand({
         await interaction.editReply('You are too suspicious to play this game. Try again later.');
         return;
       }
-    // const merit = user.meritPoints;
-    // if(merit<150){
-    //       await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
-    //       return;
-    //   }
+    const merit = user.meritPoints;
+    if(merit<150){
+          await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
+          return;
+      }
     user.survivalDays += 1;
     await user.save();
     // Check for isolation or high suspicion

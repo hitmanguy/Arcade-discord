@@ -70,16 +70,16 @@ const GAME_REWARDS = {
           });
           return;
         }
-        // const suspicous = user.suspiciousLevel>50;
-        // if(suspicous){
-        //   await interaction.reply('You are too suspicious to play this game. Try again later.');
-        //   return;
-        // }
-        // const merit = user.meritPoints;
-        // if(merit<100){
-        //   await interaction.reply('You dont have enough merit points to play this. You can play the previous game to earn more points');
-        //   return;
-        // }
+        const suspicous = user.suspiciousLevel>50;
+        if(suspicous){
+          await interaction.reply('You are too suspicious to play this game. Try again later.');
+          return;
+        }
+        const merit = user.meritPoints;
+        if(merit<100){
+          await interaction.reply('You dont have enough merit points to play this. You can play the previous game to earn more points');
+          return;
+        }
         user.survivalDays+=1;
         await user.save();
         const subcommand = interaction.options.getSubcommand();
