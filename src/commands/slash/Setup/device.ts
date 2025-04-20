@@ -164,7 +164,7 @@ export default new SlashCommand({
 
     collector?.on('collect', async (msg) => {
       if (bot_type){
-        msg.reply({ content: 'Please wait for the bot to respond.', allowedMentions: { repliedUser: false } });
+        msg.reply({ content: 'Cmon! give some time to you inmated to respond you. Are u getting too excited?', allowedMentions: { repliedUser: false } });
         return;
       }
       bot_type = true;

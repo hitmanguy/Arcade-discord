@@ -15,7 +15,13 @@ export default new Event({
                 // Decrease suspicion for each user
                 for (const user of users) {
                     // Decrease by 1, but don't go below 0
+
                     user.suspiciousLevel = Math.max(0, user.suspiciousLevel - 1);
+                    if(user.suspiciousLevel > 50){
+                        user.isInIsolation = true;
+                    }else{
+                        user.isInIsolation = false;
+                    }
                     await user.save();
                 
                 }

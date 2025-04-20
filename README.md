@@ -102,8 +102,10 @@ You’re racing against time. Crack numeric codes, predict patterns, and solve c
    - 🧪 Syringe (+20 Sanity) — 50 merit
    - 🕒 Skip a Day (-25 Suspicion) — 75 merit
    - ⏱️ Suspicion Timer — 100 merit
+8. Additionally we have an ai chatbot accessible with /device: you can have fun chats with it.
 
 ---
+
 
 ## 📉 Sanity & Suspicion Mechanics
 

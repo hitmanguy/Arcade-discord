@@ -11,10 +11,10 @@ import {
   ColorResolvable
 } from 'discord.js';
 import { RegisterType, SlashCommand } from '../../../handler';
-import progressCommand from '../Progress/progress'; // adjust path if needed
 import { join } from 'path';
 import { User } from '../../../model/user_status';
 import { PRISON_COLORS } from '../../../constants/GAME_CONSTANTS';
+import { UserService } from '../../../services/user_services';
 
 function createTimeoutEmbed(sanityLoss: number, suspicionGain: number) {
   return new EmbedBuilder()
@@ -399,6 +399,8 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
 async function showFinalOptions(interaction: ChatInputCommandInteraction, userId: string) {
   const session = userProgressMap.get(userId);
   if (!session) return;
+  const user = await User.findOne({ discordId: interaction.user.id });
+  if (!user) return;
 
   // Create the attachment for the puzzle GIF from local file
   const puzzleGifPath = join(__dirname, '../../../Gifs/puzzle.gif');
@@ -410,7 +412,6 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
     .setImage('attachment://puzzle.gif') // Reference the attachment
     .addFields(
       { name: '💰 Merit Points', value: session.merit.toString(), inline: true },
-      { name: '💡 Hints Earned', value: session.hint.toString(), inline: true },
       { name: '🧠 Sanity', value: session.sanity.toString(), inline: true },
       { name: '👁️ Suspicion', value: session.suspicion.toString(), inline: true }
     )
@@ -428,6 +429,19 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
       .setLabel('👤 View Profile')
       .setStyle(ButtonStyle.Secondary)
   );
+  await Promise.all([
+              UserService.updateUserStats(interaction.user.id, {
+              meritPoints: user.meritPoints + session.merit ,
+              sanity: Math.min(Math.max(user.sanity + session.sanity, 0), 100),
+              suspiciousLevel: Math.min(user.suspiciousLevel + session.suspicion, 100),
+              totalGamesPlayed: user.totalGamesPlayed + 1,
+              totalGamesWon: user.totalGamesWon + 1 ,
+              currentStreak: user.currentStreak + 1
+                        }),
+              UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', true)
+  ]);
+
+
 
   const message = await interaction.editReply({
     embeds: [embed],
