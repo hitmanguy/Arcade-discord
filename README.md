@@ -78,7 +78,7 @@ You’re racing against time. Crack numeric codes, predict patterns, and solve c
 
 - 🧠 **Focus:** Number logic, calculations, and sequences  
 - ⏱️ **Challenge:** Timed pressure with rising difficulty  
-- 🎯 **Goal:** Reach a total of 250 merit points to successfully breach the prison and be set free
+- 🎯 **Goal:** Complete this level to successfully breach the prison and be set free
 
 
 ---
@@ -152,8 +152,20 @@ GUILD_ID=your_test_guild_id (for local testing)
 MONGO_DB = your mongodb id
 CHARACTER_TOKEN = "character.ai token for chatbot"
 ```
+---
+## 📽️ Demo Run Video
+
+[![Demo Run Video](https://img.youtube.com/vi/9U7K6cM87y4/0.jpg)](https://www.youtube.com/watch?v=9U7K6cM87y4)
+
+🎮 *Enjoy the demo run and get a glimpse of how you can solve this prison escape puzzle in the shortest time!* ⏱️
+
 
 ---
+## 📽️ Discord Deployment Link
+
+You can deploy the bot into your own discord server using this link : https://discord.com/oauth2/authorize?client_id=1360309700599742594
+---
+
 ## 👨‍💻 Contributors
 
 - **Sahil Chauhan** — IMT2024090
