@@ -137,7 +137,8 @@ $ touch .env
 # 5. Add the required variables in .env (see below)
 
 # 6. Start the bot
-$ npm run start:node
+$ npm run build
+$ npm run start:build
 ```
 
 ---
