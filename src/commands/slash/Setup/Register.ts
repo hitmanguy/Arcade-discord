@@ -10,13 +10,14 @@ import {
   SlashCommandBuilder,
   ComponentType,
   ColorResolvable,
-  ButtonInteraction
+  ButtonInteraction,
+  AttachmentBuilder
 } from 'discord.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { UserService } from '../../../services/user_services';
 import { PRISON_COLORS, STARTER_ITEMS } from '../../../constants/GAME_CONSTANTS';
 import { Device } from '../../../model/Device_schema';
-
+import { join } from 'path';
 
 export default new SlashCommand({
   registerType: RegisterType.Guild,
@@ -85,11 +86,16 @@ export default new SlashCommand({
       await UserService.addToInventory(userId, item.itemId, item.name, item.quantity);
     }
     
-    // Create welcome embed
+    // Create the attachment for the welcome GIF from local file
+    const welcomeGifPath = join(__dirname, '../../../assets/gifs/welcome.gif');
+    const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+    
+    // Create welcome embed with GIF
     const welcomeEmbed = new EmbedBuilder()
       .setColor(PRISON_COLORS.danger as ColorResolvable)
       .setTitle(`🔒 WELCOME TO INFINITE PRISON - INMATE #${userId.slice(-6)}`)
       .setDescription(`*"${crime}"*\n\nYour sentence begins today. There is no escape from the Infinite Prison.`)
+      .setImage('attachment://welcome.gif') // Reference the attachment
       .setThumbnail(interaction.user.displayAvatarURL())
       .addFields(
         { 
@@ -126,6 +132,7 @@ export default new SlashCommand({
     await interaction.editReply({
       content: `<@${userId}> has been processed and admitted to the Infinite Prison.`,
       embeds: [welcomeEmbed],
+      files: [welcomeGifAttachment], // Include the GIF file
       components: [buttonRow]
     });
     
@@ -151,6 +158,7 @@ export default new SlashCommand({
           break;
       }
     });
+    
     collector?.on('end', async () => {
       try {
         await interaction.editReply({
@@ -160,6 +168,7 @@ export default new SlashCommand({
         console.error('Failed to remove components:', error);
       }
     });
+    
     await sleep(60000);
 
     try {
@@ -191,18 +200,18 @@ export default new SlashCommand({
     } catch (error) {
       console.error('Error managing device:', error);
       throw error; // Re-throw to handle in calling function
-  }
+    }
     
-  const mysteriousEmbed = new EmbedBuilder()
+    const mysteriousEmbed = new EmbedBuilder()
       .setColor('#6f42c1')
       .setTitle('A Mysterious Device...')
       .setDescription('A cryptic message appears on a hidden screen:\n\n*You have been chosen. Use `/device` to connect. Beware the eyes in the dark...*')
       .setFooter({ text: 'The device vibrates softly in your palm.' });
     
-  await interaction.followUp({ embeds: [mysteriousEmbed], flags: [MessageFlags.Ephemeral] }); 
-  newUser.deviceActivated = true; 
-  await newUser.save();
-  await sleep(2000);
+    await interaction.followUp({ embeds: [mysteriousEmbed], flags: [MessageFlags.Ephemeral] }); 
+    newUser.deviceActivated = true; 
+    await newUser.save();
+    await sleep(2000);
   },
 });
 
@@ -211,6 +220,7 @@ async function createWelcomeEmbed(userId: string, crime: string, userAvatar: str
     .setColor(PRISON_COLORS.danger as ColorResolvable)
     .setTitle(`🔒 WELCOME TO INFINITE PRISON - INMATE #${userId.slice(-6)}`)
     .setDescription(`*"${crime}"*\n\nYour sentence begins today. There is no escape from the Infinite Prison.`)
+    .setImage('attachment://welcome.gif') // Reference the attachment
     .setThumbnail(userAvatar)
     .addFields(
       { 
@@ -275,6 +285,10 @@ async function showTutorial(interaction: ButtonInteraction) {
   
   collector?.on('collect', async (i: ButtonInteraction) => {
     await i.deferUpdate();
+    
+    // Need to include the welcome GIF again when going back
+    const welcomeGifPath = join(__dirname, '../../Gifs/welcome.gif'); 
+    const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
         
     const welcomeEmbed = await createWelcomeEmbed(
       interaction.user.id,
@@ -301,10 +315,11 @@ async function showTutorial(interaction: ButtonInteraction) {
     await i.editReply({
       content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
       embeds: [welcomeEmbed],
+      files: [welcomeGifAttachment], // Include the GIF file
       components: [buttonRow]
     });
-
   });
+  
   collector?.on('end', async () => {
     try {
       await interaction.editReply({
@@ -358,6 +373,10 @@ async function showActivities(interaction: ButtonInteraction) {
   
   collector?.on('collect', async (i: ButtonInteraction) => {
     await i.deferUpdate();
+    
+    // Need to include the welcome GIF again when going back
+    const welcomeGifPath = join(__dirname, '../../../assets/gifs/welcome.gif');
+    const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
         
     const welcomeEmbed = await createWelcomeEmbed(
       interaction.user.id,
@@ -379,12 +398,15 @@ async function showActivities(interaction: ButtonInteraction) {
         .setLabel('🎯 Available Activities')
         .setStyle(ButtonStyle.Success)
     );
+    
     await i.editReply({
       content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
       embeds: [welcomeEmbed],
+      files: [welcomeGifAttachment], // Include the GIF file
       components: [buttonRow]
     });
   });
+  
   collector?.on('end', async () => {
     try {
       await interaction.editReply({
@@ -394,5 +416,4 @@ async function showActivities(interaction: ButtonInteraction) {
       console.error('Failed to remove components:', error);
     }
   });
-  
 }
