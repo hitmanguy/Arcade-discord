@@ -87,7 +87,7 @@ export default new SlashCommand({
     }
     
     // Create the attachment for the welcome GIF from local file
-    const welcomeGifPath = join(__dirname, '../../../assets/gifs/welcome.gif');
+    const welcomeGifPath = join(__dirname, '../../../Gifs/welcome.gif');
     const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
     
     // Create welcome embed with GIF
@@ -287,7 +287,7 @@ async function showTutorial(interaction: ButtonInteraction) {
     await i.deferUpdate();
     
     // Need to include the welcome GIF again when going back
-    const welcomeGifPath = join(__dirname, '../../Gifs/welcome.gif'); 
+    const welcomeGifPath = join(__dirname, '../../../Gifs/welcome.gif');
     const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
         
     const welcomeEmbed = await createWelcomeEmbed(
@@ -375,7 +375,7 @@ async function showActivities(interaction: ButtonInteraction) {
     await i.deferUpdate();
     
     // Need to include the welcome GIF again when going back
-    const welcomeGifPath = join(__dirname, '../../../assets/gifs/welcome.gif');
+    const welcomeGifPath = join(__dirname, '../../../Gifs/welcome.gif');
     const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
         
     const welcomeEmbed = await createWelcomeEmbed(

@@ -73,7 +73,7 @@ export default new SlashCommand({
         }
 
         const currentPuzzleId = user.currentPuzzle || 'puzzles1';
-        const puzzleOrder = ['puzzles1', 'tunnel1', 'matchingpairs', 'UNO', 'numbers-game-command', 'Judas'];
+        const puzzleOrder = ['puzzles1', 'tunnel1', 'matchingpairs', 'UNO', 'numbers-game-command'];
         const currentIndex = puzzleOrder.indexOf(currentPuzzleId);
         const completedCount = user.puzzleProgress.filter(p => p.completed).length;
         
@@ -109,9 +109,12 @@ export default new SlashCommand({
                     if (isCurrentPuzzle) {
                         progressDescription += `┗━ ${storylineData.flavorText}\n`;
                     }
+                    progressDescription += `┗━ ${storylineData.slash}\n`;
                 }
             } else {
-                progressDescription += `┗━ *[Access Denied - Complete previous trials]*\n`;
+                if(isStorylineData(storylineData)) {
+                progressDescription += `┗━ *[Access Denied - ${storylineData.access}]*\n`;
+                }
             }
         });
 

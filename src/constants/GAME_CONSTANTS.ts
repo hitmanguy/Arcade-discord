@@ -49,32 +49,37 @@ export const STORYLINE = {
     puzzles1: {
         name: "🔓 Basic Training",
         description: "Simple riddles and puzzles to test your mental acuity. The guards are watching...",
-        flavorText: "The first test seems simple enough, but something feels off about this place..."
+        flavorText: "The first test seems simple enough, but something feels off about this place...",
+        slash: "Use ./puzzle to play",
+        access: "unlocked"
     },
     tunnel1: {
         name: "🚇 The Tunnel",
         description: "Navigate through a digital maze of patterns and sequences.",
-        flavorText: "The deeper you go, the more the walls seem to shift and change..."
+        flavorText: "The deeper you go, the more the walls seem to shift and change...",
+        slash: "Use ./tunnel to play",
+        access: "acquire 50 merits point to unlock",
     },
     matchingpairs: {
         name: "🎴 Memory Test",
         description: "Match the patterns, but be quick - your mind plays tricks in this place.",
-        flavorText: "The symbols dance before your eyes. Are they changing, or is it just your imagination?"
+        flavorText: "The symbols dance before your eyes. Are they changing, or is it just your imagination?",
+        slash: "Use ./matching to play",
+        access: "acquire 100 merits point to unlock",
     },
     UNO: {
         name: "🃏 Digital Card Protocol",
         description: "A seemingly innocent card game that tests your strategic thinking.",
-        flavorText: "Even a simple game of cards feels sinister in this place..."
+        flavorText: "Even a simple game of cards feels sinister in this place...",
+        slash: "Use ./uno to play",
+        access: "acquire 150 merits point to unlock",
     },
     "numbers-game-command": {
         name: "🔢 The Numbers Protocol",
         description: "Trust no one. Choose your numbers wisely. Betrayal lurks in every corner.",
-        flavorText: "The true nature of this prison begins to reveal itself..."
-    },
-    Judas: {
-        name: "👥 The Judas Protocol",
-        description: "The final test. Unmask the traitor - or become one yourself.",
-        flavorText: "Everything has led to this moment. But can you trust even yourself?"
+        flavorText: "The true nature of this prison begins to reveal itself...",
+        slash: "Use ./number-game create/join/rule to play",
+        access: "acquire 200 merits point to unlock",
     }
 };
 

@@ -23,7 +23,7 @@ export interface KingsOfDiamondsPlayer {
     private players: KingsOfDiamondsPlayer[] = [];
     private round: number = 0;
     private phase: number = 1;
-    private eliminationScore: number = -10;
+    private eliminationScore: number = 0;
     private hasStarted: boolean = false;
     private ruleStack: string[] = [
       "If a player chooses 0, the player who chooses 100 wins the round.",
@@ -153,7 +153,7 @@ export interface KingsOfDiamondsPlayer {
       if (!specialRuleApplied) {
         // Apply default rules
         // Case: All players chose the same number
-        if (numbers.some(n => n === numbers[0])) {
+        if (new Set(numbers).size !== numbers.length) {
           activePlayers.forEach(p => p.score--);
           message = 'some players chose the same number! Everyone loses a point.';
         } else {
@@ -355,7 +355,7 @@ export interface KingsOfDiamondsPlayer {
       const target = this.players.find(p => p.id === targetId);
       if (!target || target.extraLives <= 0) return false;
       
-      target.extraLives--;
+      target.score=target.score-2;
       if (target.extraLives <= 0 && target.score <= this.eliminationScore) {
         target.isEliminated = true;
       }
@@ -454,5 +454,8 @@ export interface KingsOfDiamondsPlayer {
   
     public getPhase(): number {
       return this.phase;
+    }
+    public getRules(): string{
+      return this.activeRules[-1];
     }
   }

@@ -18,9 +18,10 @@ export default new SlashCommand({
     .setDescription('Buy tools to manage sanity and suspicion'),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
     const player = await User.findOne({ discordId: interaction.user.id });
     if (!player) {
-        await interaction.reply({ content: 'Player not found.',  flags: [MessageFlags.Ephemeral], });
+        await interaction.editReply({ content: 'Player not found.' });
         return;
       }
       
@@ -37,10 +38,9 @@ export default new SlashCommand({
       new ButtonBuilder().setCustomId('buy_timer').setLabel('⏱️ Timer').setStyle(ButtonStyle.Success),
     );
 
-    await interaction.reply({
+    await interaction.editReply({
       content: embedContent,
-      components: [row],
-      flags: [MessageFlags.Ephemeral],
+      components: [row]
     });
 
     const collector = interaction.channel?.createMessageComponentCollector({
@@ -49,8 +49,9 @@ export default new SlashCommand({
     });
 
     collector?.on('collect', async (btnInt) => {
+      await btnInt.deferUpdate();
       if (btnInt.user.id !== interaction.user.id) {
-        return btnInt.reply({ content: 'You cannot use this shop.', ephemeral: true });
+        return btnInt.editReply({ content: 'You cannot use this shop.' });
       }
 
       let response = '';
@@ -94,7 +95,9 @@ export default new SlashCommand({
       }
 
       await player.save();
-      await btnInt.reply({ content: response,  flags: [MessageFlags.Ephemeral], });
+      if(response){
+        await btnInt.editReply({ content: response });
+      }
     });
   },
 });
