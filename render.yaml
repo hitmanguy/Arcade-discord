@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: infineox-bot
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:node
+    envVars:
+      - key: CLIENT_TOKEN
+        sync: false
+      - key: MONGO_DB
+        sync: false
+      - key: GUILD_ID
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: CHARACTER_TOKEN
+        value: production
