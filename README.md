@@ -1,4 +1,4 @@
-# 🧠 Prison Escape Puzzle Bot
+# 🧠 Insanity
 
 An immersive multiplayer Discord bot where players must solve puzzles, outwit others, and escape from a mysterious high-security prison. Designed for both solo and team play, this game blends logical puzzles with psychological strategy in a thrilling escape experience.
 
