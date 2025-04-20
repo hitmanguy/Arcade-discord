@@ -1,15 +1,17 @@
-import { RegisterType, SlashCommand } from '../../../handler';
 import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  type ChatInputCommandInteraction,
+  ChatInputCommandInteraction,
   SlashCommandBuilder,
   MessageFlags,
   ComponentType,
+  EmbedBuilder,
 } from 'discord.js';
+import { RegisterType, SlashCommand } from '../../../handler';
+import progressCommand from 'src/progress'; // adjust path if needed
 
-// Define Level 1 puz
+
 const level1Puzzles = [
   // Ri
   {
@@ -106,57 +108,184 @@ const level1Puzzles = [
   },
 ];
 
+// Track user progress temporarily (replace with database logic in production)
+const userProgressMap = new Map<string, {
+  index: number,
+  puzzles: typeof level1Puzzles,
+  merit: number,
+  hint: number,
+  sanity: number,
+  suspicion: number,
+}>();
+
+function getRandomPuzzles(n: number) {
+  const shuffled = [...level1Puzzles].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, n);
+}
+
 export default new SlashCommand({
   registerType: RegisterType.Guild,
 
   data: new SlashCommandBuilder()
     .setName('puzzle')
-    .setDescription('Solve a random level 1 puzzle!'),
+    .setDescription('Solve a sequence of level 1 puzzles!'),
 
-  async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    const puzzle = level1Puzzles[Math.floor(Math.random() * level1Puzzles.length)];
+  async execute(interaction: ChatInputCommandInteraction) {
+    const userId = interaction.user.id;
+    const puzzles = getRandomPuzzles(5);
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      puzzle.options.map((opt) =>
-        new ButtonBuilder()
-          .setCustomId(`puzzle:answer:${opt}`)
-          .setLabel(opt)
-          .setStyle(ButtonStyle.Primary)
-      )
-    );
-
-    await interaction.reply({
-      content: `🧠 **${puzzle.type.toUpperCase()}**
-${puzzle.question}`,
-      components: [row],
-      flags: [MessageFlags.Ephemeral],
+    userProgressMap.set(userId, {
+      index: 0,
+      puzzles,
+      merit: 0,
+      hint: 0,
+      sanity: 0,
+      suspicion: 0,
     });
 
-    const collector = interaction.channel?.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: 15000,
-      max: 1,
-    });
-
-    collector?.on('collect', async (btnInteraction:any) => {
-      if (btnInteraction.user.id !== interaction.user.id) {
-        return btnInteraction.reply({
-          content: 'This is not your puzzle!',
-          ephemeral: true,
-        });
-      }
-
-      const chosen = btnInteraction.customId.split(':')[2];
-      const isCorrect = chosen === puzzle.answer;
-
-      await btnInteraction.update({
-        content: isCorrect
-          ? `✅ Correct! **${puzzle.answer}** was the right answer.
-🎉 +10 Merit | 🧠 +1 Hint`
-          : `❌ Wrong! The correct answer was **${puzzle.answer}**.
-🔻 -5 Sanity | ⚠️ +5 Suspicion`,
-        components: [],
-      });
-    });
+    await sendPuzzle(interaction, userId);
   },
 });
+
+async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: string) {
+  const session = userProgressMap.get(userId);
+  if (!session) return;
+
+  const current = session.puzzles[session.index];
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    current.options.map(opt =>
+      new ButtonBuilder()
+        .setCustomId(`puzzle:answer:${opt}`)
+        .setLabel(opt)
+        .setStyle(ButtonStyle.Primary)
+    )
+  );
+
+  await interaction.reply({
+    content: `🧠 **${current.type.toUpperCase()}**
+${current.question}`,
+    components: [row],
+    flags: [MessageFlags.Ephemeral],
+  });
+
+  const collector = interaction.channel?.createMessageComponentCollector({
+    componentType: ComponentType.Button,
+    time: 15000,
+    max: 1,
+  });
+
+  collector?.on('collect', async (btnInteraction: any) => {
+    if (btnInteraction.user.id !== interaction.user.id) {
+      return btnInteraction.reply({ content: 'This is not your puzzle!', ephemeral: true });
+    }
+
+    const chosen = btnInteraction.customId.split(':')[2];
+    const isCorrect = chosen === current.answer;
+
+    if (isCorrect) {
+      session.merit += 10;
+      session.hint += 1;
+    } else {
+      session.sanity -= 5;
+      session.suspicion += 5;
+    }
+
+    await btnInteraction.update({
+      content: isCorrect
+        ? `✅ Correct! **${current.answer}** was the right answer.
+🎉 +10 Merit | 🧠 +1 Hint`
+        : `❌ Wrong! The correct answer was **${current.answer}**.
+🔻 -5 Sanity | ⚠️ +5 Suspicion`,
+      components: [],
+    });
+
+    session.index += 1;
+
+    // Wait a moment, then show next or final screen
+    setTimeout(async () => {
+      if (session.index < 5) {
+        await sendPuzzle(interaction, userId);
+      } else {
+        await showFinalOptions(interaction, userId);
+      }
+    }, 2000);
+  });
+}
+
+async function showFinalOptions(interaction: ChatInputCommandInteraction, userId: string) {
+  const session = userProgressMap.get(userId);
+  if (!session) return;
+
+  const embed = new EmbedBuilder()
+    .setTitle('🧩 Puzzle Report')
+    .setDescription(`You've completed Level 1 puzzles!`)
+    .addFields(
+      { name: 'Merit Points', value: session.merit.toString(), inline: true },
+      { name: 'Hints Earned', value: session.hint.toString(), inline: true },
+      { name: 'Sanity Lost', value: session.sanity.toString(), inline: true },
+      { name: 'Suspicion Gained', value: session.suspicion.toString(), inline: true }
+    )
+    .setColor('Blue');
+
+  const continueRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('puzzle:continue:tunnel')
+      .setLabel('🚇 Enter Tunnel')
+      .setStyle(session.merit >= 50 ? ButtonStyle.Success : ButtonStyle.Secondary)
+      .setDisabled(session.merit < 50),
+
+    new ButtonBuilder()
+      .setCustomId('puzzle:continue:retry')
+      .setLabel('🔁 Play Again')
+      .setStyle(ButtonStyle.Primary)
+  );
+
+  await interaction.followUp({
+    embeds: [embed],
+    components: [continueRow],
+    ephemeral: true,
+  });
+
+  const collector = interaction.channel?.createMessageComponentCollector({
+    componentType: ComponentType.Button,
+    time: 15000,
+    max: 1,
+  });
+
+  collector?.on('collect', async (btnInteraction: any) => {
+    if (btnInteraction.user.id !== interaction.user.id) {
+      return btnInteraction.reply({ content: 'This is your puzzle journey!', ephemeral: true });
+    }
+
+    if (btnInteraction.customId === 'puzzle:continue:retry') {
+      userProgressMap.delete(userId);
+      const newPuzzles = getRandomPuzzles(5);
+    
+      userProgressMap.set(userId, {
+        index: 0,
+        puzzles: newPuzzles,
+        merit: 0,
+        hint: 0,
+        sanity: 0,
+        suspicion: 0,
+      });
+    
+      return await sendPuzzle(btnInteraction, userId);
+    }
+    
+    if (btnInteraction.customId === 'puzzle:continue:tunnel') {
+      return await btnInteraction.reply({
+        content: '🚇 Entering **The Tunnel**...\n> _[Tunnel command to be triggered here]_',
+        ephemeral: true,
+      });
+    }
+  });
+
+  // Optionally trigger progress slash command
+  await interaction.client.application?.commands.fetch().then(commands => {
+    const progressCmd = commands.find(cmd => cmd.name === 'progress');
+    if (progressCmd) {
+      await progressCommand.execute(interaction);
+    }
+  });
+}
