@@ -2,7 +2,10 @@ import {
   TextChannel, 
   EmbedBuilder, 
   Message,
-  MessageCollector
+  MessageCollector,
+  Client,
+  Interaction,
+  InteractionType
 } from 'discord.js';
 import { removeGame } from './numbers-game-lobby';
 import { runStandardRound } from './numbers-game-standard-phase';
@@ -11,6 +14,7 @@ import { runFinalDuelRound } from './numbers-game-final-duel';
 // Player type definition
 export interface Player {
   id: string;
+  username: string;
   lives: number;
   currentNumber: number | null;
   teamUpWith: string | null;  // ID of player they want to team up with
@@ -24,6 +28,8 @@ export interface TeamUp {
   number: number | null;
 }
 
+const modalHandlers = new Map<string, (interaction: Interaction) => Promise<void>>();
+
 export class GameState {
   gameCode: string;
   hostId: string;
@@ -32,6 +38,9 @@ export class GameState {
   gameStarted: boolean;
   currentRound: number;
   teamUps: TeamUp[];
+  createdAt: number;
+  lastActivityAt: number;
+  private static handlerRegistered = false;
   
   constructor(gameCode: string, hostId: string, channelId: string) {
     this.gameCode = gameCode;
@@ -41,8 +50,29 @@ export class GameState {
     this.gameStarted = false;
     this.currentRound = 0;
     this.teamUps = [];
+    this.createdAt = Date.now();
+    this.lastActivityAt = this.createdAt;
   }
-  
+
+  static registerGlobalHandler(client: Client) {
+    if (this.handlerRegistered) return;
+
+    client.on('interactionCreate', async (interaction: Interaction) => {
+      if (interaction.type === InteractionType.ModalSubmit) {
+        const handler = modalHandlers.get(interaction.customId.split('_')[0]);
+        if (handler) {
+          await handler(interaction);
+        }
+      }
+    });
+
+    this.handlerRegistered = true;
+  }
+
+  static registerModalHandler(prefix: string, handler: (interaction: Interaction) => Promise<void>) {
+    modalHandlers.set(prefix, handler);
+  }
+
   // Get players who are still alive
   getAlivePlayers(): Player[] {
     return this.players.filter(player => player.lives > 0);
@@ -57,6 +87,7 @@ export class GameState {
       player.teamUpOffer = null;
     });
     this.teamUps = [];
+    this.updateLastActivity();
   }
   
   // Calculate average of all numbers
@@ -92,16 +123,19 @@ export class GameState {
   // Run standard phase (5-4 players)
   async runStandardPhase(channel: TextChannel): Promise<void> {
     await runStandardRound(channel, this);
+    this.updateLastActivity();
   }
   
   // Run betrayal phase (3 players)
   async runBetrayalPhase(channel: TextChannel): Promise<void> {
     await runBetrayalRound(channel, this);
+    this.updateLastActivity();
   }
   
   // Run final duel phase (2 players)
   async runFinalDuelPhase(channel: TextChannel): Promise<void> {
     await runFinalDuelRound(channel, this);
+    this.updateLastActivity();
   }
   
   // Reduce a player's life
@@ -127,6 +161,7 @@ export class GameState {
     };
     
     this.teamUps.push(teamUp);
+    this.updateLastActivity();
     return teamUp;
   }
   
@@ -146,6 +181,7 @@ export class GameState {
     
     if (teamUp) {
       teamUp.accepted = true;
+      this.updateLastActivity();
       return true;
     }
     
@@ -160,9 +196,21 @@ export class GameState {
     
     if (teamUp) {
       teamUp.number = number;
+      this.updateLastActivity();
       return true;
     }
     
     return false;
+  }
+
+  // Update last activity timestamp
+  private updateLastActivity(): void {
+    this.lastActivityAt = Date.now();
+  }
+
+  // End game cleanup
+  endGame(): void {
+    this.updateLastActivity();
+    removeGame(this.gameCode);
   }
 }

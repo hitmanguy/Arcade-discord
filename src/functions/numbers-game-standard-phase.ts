@@ -1,71 +1,149 @@
 import { 
   TextChannel, 
   EmbedBuilder, 
-  MessageCollector, 
   ActionRowBuilder, 
   ButtonBuilder, 
   ButtonStyle, 
   ComponentType, 
-  ButtonInteraction 
+  ButtonInteraction,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  InteractionType,
+  Interaction,
+  Collection
 } from 'discord.js';
 import { GameState, Player } from './numbers-game-state';
 
 export async function runStandardRound(channel: TextChannel, gameState: GameState): Promise<void> {
   // Reset for new round
   gameState.resetRound();
-  
   const alivePlayers = gameState.getAlivePlayers();
-  
+
+  // Register modal handler for number submission
+  GameState.registerGlobalHandler(channel.client);
+  GameState.registerModalHandler('number', async (interaction: Interaction) => {
+    if (!interaction.isModalSubmit()) return;
+    
+    const playerId = interaction.customId.replace('number_modal_', '');
+    const player = alivePlayers.find(p => p.id === playerId);
+          
+    if (!player) {
+      await interaction.reply({ content: 'Error: Player not found.', ephemeral: true });
+      return;
+    }
+
+    const numberInput = interaction.fields.getTextInputValue('number_input').trim();
+    const num = parseInt(numberInput);
+
+    if (isNaN(num)) {
+      await interaction.reply({ content: 'Error: Please enter a valid number.', ephemeral: true });
+      return;
+    }
+
+    if (num < 1 || num > 100) {
+      await interaction.reply({ content: 'Error: Number must be between 1 and 100.', ephemeral: true });
+      return;
+    }
+
+    // Track submissions using player state
+    if (player.currentNumber !== null) {
+      await interaction.reply({ content: 'Error: You have already submitted a number.', ephemeral: true });
+      return;
+    }
+
+    player.currentNumber = num;
+    await interaction.reply({ 
+      content: `Your number (${num}) has been submitted! Wait for other players...`, 
+      ephemeral: true 
+    });
+
+    // Check if all players have submitted
+    const submittedCount = alivePlayers.filter(p => p.currentNumber !== null).length;
+    if (submittedCount === alivePlayers.length) {
+      await channel.send("All players have submitted their numbers! Processing results...");
+    } else {
+      const remaining = alivePlayers.length - submittedCount;
+      await channel.send(`${submittedCount}/${alivePlayers.length} players have submitted. Waiting for ${remaining} more...`);
+    }
+  });
+
   // Start the round
   const roundEmbed = new EmbedBuilder()
     .setTitle(`🔢 Round ${gameState.currentRound} - Standard Phase`)
     .setDescription(`Choose a number between 1 and 100.\nThe player with the closest unique number to the average wins!`)
     .addFields(
       { name: 'Players', value: alivePlayers.map(p => `<@${p.id}> (${p.lives} ❤️)`).join('\n') },
-      { name: 'Instructions', value: `DM your number in this channel by typing:\n**choose 42** (replace with your number)` }
+      { name: 'Instructions', value: `Click your button below to submit your number!` }
     )
     .setColor(0x0099ff)
     .setFooter({ text: 'You have 30 seconds to choose a number' });
-  
-  await channel.send({ embeds: [roundEmbed] });
-  
-  // Listen for number submissions
-  const filter = (m: any) => {
-    // Check if message is from an alive player
-    const player = alivePlayers.find(p => p.id === m.author.id);
-    if (!player) return false;
-    
-    // Check if message follows the correct format
-    const content = m.content.toLowerCase().trim();
-    return content.startsWith('choose ') && !isNaN(parseInt(content.substring(7)));
-  };
-  
-  const collector = channel.createMessageCollector({ filter, time: 30000 });
-  
-  collector.on('collect', message => {
-    const playerId = message.author.id;
-    const content = message.content.toLowerCase().trim();
-    const number = parseInt(content.substring(7));
-    
-    // Validate number is between 1 and 100
-    if (number < 1 || number > 100) {
-      channel.send(`<@${playerId}> Your number must be between 1 and 100.`);
+
+  // Create buttons for each player
+  const row = new ActionRowBuilder<ButtonBuilder>();
+  alivePlayers.forEach(player => {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`submit_number_${player.id}`)
+        .setLabel(`Submit Number (${player.username})`)
+        .setStyle(ButtonStyle.Primary)
+    );
+  });
+
+  const msg = await channel.send({ embeds: [roundEmbed], components: [row] });
+
+  // Button collector for 30 seconds
+  const collector = channel.createMessageComponentCollector({
+    componentType: ComponentType.Button,
+    time: 30000,
+    filter: (i: ButtonInteraction) => alivePlayers.some(p => i.customId === `submit_number_${p.id}` && i.user.id === p.id)
+  });
+
+  collector.on('collect', async (interaction: ButtonInteraction) => {
+    const playerId = interaction.customId.replace('submit_number_', '');
+    const player = alivePlayers.find(p => p.id === playerId);
+
+    if (!player) {
+      await interaction.reply({ content: 'Error: Player not found.', ephemeral: true });
       return;
     }
-    
-    // Set player's number
-    const player = alivePlayers.find(p => p.id === playerId);
-    if (player) {
-      player.currentNumber = number;
-      message.reply(`You chose ${number}. Wait for results...`);
+
+    if (player.currentNumber !== null) {
+      await interaction.reply({ content: 'You have already submitted your number.', ephemeral: true });
+      return;
+    }
+
+    // Show modal
+    const modal = new ModalBuilder()
+      .setCustomId(`number_modal_${playerId}`)
+      .setTitle('Submit Your Number')
+      .addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
+            .setCustomId('number_input')
+            .setLabel('Enter a number between 1 and 100')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('e.g. 42')
+            .setRequired(true)
+        )
+      );
+
+    try {
+      await interaction.showModal(modal);
+    } catch (err) {
+      await interaction.reply({ content: 'Interaction expired or invalid. Please try again.', ephemeral: true });
     }
   });
-  
-  // Handle end of collection
-  collector.on('end', async collected => {
+
+  collector.on('end', async () => {
+    // Disable all buttons
+    const disabledRow = new ActionRowBuilder<ButtonBuilder>();
+    row.components.forEach(btn => disabledRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+    await msg.edit({ components: [disabledRow] });
+
     // Process results
     const results = await processStandardResults(channel, gameState);
-    
+
     // Display results
     const resultsEmbed = new EmbedBuilder()
       .setTitle(`🔢 Round ${gameState.currentRound} Results`)
@@ -74,7 +152,7 @@ export async function runStandardRound(channel: TextChannel, gameState: GameStat
         { name: 'Player Numbers', value: results.playerChoices }
       )
       .setColor(0x0099ff);
-    
+
     if (results.winner) {
       resultsEmbed.addFields(
         { name: 'Winner', value: `<@${results.winner.id}> chose ${results.winner.currentNumber}` }
@@ -84,9 +162,9 @@ export async function runStandardRound(channel: TextChannel, gameState: GameStat
         { name: 'Winner', value: 'No winner this round (no unique numbers or no submissions)' }
       );
     }
-    
+
     await channel.send({ embeds: [resultsEmbed] });
-    
+
     // If there's a winner, let them choose who loses a life
     if (results.winner) {
       await handleLifeReduction(channel, gameState, results.winner);
@@ -101,13 +179,23 @@ async function processStandardResults(channel: TextChannel, gameState: GameState
 }> {
   const alivePlayers = gameState.getAlivePlayers();
   
-  // Get players who submitted numbers
-  const playersWithNumbers = alivePlayers.filter(p => p.currentNumber !== null);
+  // Validate submissions
+  const playersWithNumbers = alivePlayers.filter(p => {
+    const isValid = p.currentNumber !== null && 
+                   !isNaN(p.currentNumber) && 
+                   p.currentNumber >= 1 && 
+                   p.currentNumber <= 100;
+    
+    if (!isValid && p.currentNumber !== null) {
+      p.currentNumber = null;
+    }
+    return isValid;
+  });
   
   if (playersWithNumbers.length === 0) {
     return {
       average: 0,
-      playerChoices: "No numbers submitted",
+      playerChoices: "No valid numbers submitted",
       winner: null
     };
   }
@@ -138,7 +226,6 @@ async function processStandardResults(channel: TextChannel, gameState: GameState
     return `<@${p.id}>: ${numStr}${dupStr}`;
   }).join('\n');
   
-  // Return results
   return {
     average,
     playerChoices,
@@ -153,7 +240,7 @@ async function handleLifeReduction(channel: TextChannel, gameState: GameState, w
   const buttons = alivePlayers.map(p =>
     new ButtonBuilder()
       .setCustomId(`eliminate_${p.id}`)
-      .setLabel(`${p.id} (${p.lives} ❤️)`)
+      .setLabel(`${p.username} (${p.lives} ❤️)`)
       .setStyle(ButtonStyle.Danger)
   );
 
@@ -179,7 +266,7 @@ async function handleLifeReduction(channel: TextChannel, gameState: GameState, w
   });
 
   collector.on('collect', async (interaction: ButtonInteraction) => {
-    await interaction.deferUpdate(); // Acknowledge immediately
+    await interaction.deferUpdate();
 
     const targetId = interaction.customId.replace('eliminate_', '');
     const target = alivePlayers.find(p => p.id === targetId);
@@ -194,8 +281,11 @@ async function handleLifeReduction(channel: TextChannel, gameState: GameState, w
 
     // Disable all buttons after selection
     const disabledRows = rows.map(row => {
-      row.components.forEach(btn => btn.setDisabled(true));
-      return row;
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+      row.components.forEach(btn => 
+        newRow.addComponents(ButtonBuilder.from(btn as ButtonBuilder).setDisabled(true))
+      );
+      return newRow;
     });
 
     // Announce result
@@ -215,16 +305,19 @@ async function handleLifeReduction(channel: TextChannel, gameState: GameState, w
   });
 
   collector.on('end', async collected => {
-    // If no selection, pick a random player
     if (collected.size === 0 && alivePlayers.length > 0) {
+      // If no selection, pick a random player
       const randomIndex = Math.floor(Math.random() * alivePlayers.length);
       const target = alivePlayers[randomIndex];
       target.lives--;
 
       // Disable all buttons after timeout
       const disabledRows = rows.map(row => {
-        row.components.forEach(btn => btn.setDisabled(true));
-        return row;
+        const newRow = new ActionRowBuilder<ButtonBuilder>();
+        row.components.forEach(btn => 
+          newRow.addComponents(ButtonBuilder.from(btn as ButtonBuilder).setDisabled(true))
+        );
+        return newRow;
       });
 
       const resultEmbed = new EmbedBuilder()
