@@ -14,6 +14,8 @@ import {
   ButtonInteraction
 } from 'discord.js';
 import { GameState, Player } from './numbers-game-state';
+import { User } from '../model/user_status';
+import { PRISON_COLORS, SANITY_EFFECTS } from '../constants/GAME_CONSTANTS';
 
 // Extend Client type to track modal handlers
 declare module 'discord.js' {
@@ -25,589 +27,317 @@ declare module 'discord.js' {
 }
 
 export async function runBetrayalRound(channel: TextChannel, gameState: GameState): Promise<void> {
-  gameState.resetRound();
+  // Reset for new round
+  await gameState.resetRound();
   const alivePlayers = gameState.getAlivePlayers();
-  const client = channel.client;
 
-  // Register modal handlers
-  GameState.registerGlobalHandler(client);
-  
-  // Handler for team formation
-  GameState.registerModalHandler('teamup', async (interaction: Interaction) => {
-    if (!interaction.isModalSubmit()) return;
-    
-    const playerId = interaction.customId.replace('team_modal_', '');
-    const player = alivePlayers.find(p => p.id === playerId);
-    
-    if (!player) {
-      await interaction.reply({ content: 'Invalid player.', ephemeral: true });
-      return;
+  // Get player sanity levels
+  const playerSanity = new Map<string, number>();
+  for (const player of alivePlayers) {
+    const user = await User.findOne({ discordId: player.id });
+    if (user) {
+      playerSanity.set(player.id, user.sanity);
     }
+  }
 
-    const targetInput = interaction.fields.getTextInputValue('teammate_input');
-    const target = alivePlayers.find(p =>
-      p.id === targetInput.replace(/[<@!>]/g, '') ||
-      p.username.toLowerCase() === targetInput.replace('@', '').toLowerCase()
-    );
+  // First phase: Team formation with trust mechanics
+  const teamPhaseEmbed = new EmbedBuilder()
+    .setTitle('🤝 Trust Protocol - Team Formation')
+    .setDescription(playerSanity.get(gameState.hostId)! < 40
+      ? 'A̷l̷l̷i̷e̷s̷ ̷o̷r̷ ̷e̷n̷e̷m̷i̷e̷s̷?̷ ̷T̷h̷e̷ ̷l̷i̷n̷e̷s̷ ̷b̷l̷u̷r̷.̷.̷.'
+      : 'Form alliances or go solo. Choose wisely - trust is a fragile thing.')
+    .addFields(
+      { name: 'Subjects', value: alivePlayers.map(p => {
+          const sanity = playerSanity.get(p.id) || 100;
+          return sanity < 40 
+            ? `<@${p.id}> (${p.lives} ❤️) [S̷a̷n̷i̷t̷y̷:̷ ${sanity}%]`
+            : `<@${p.id}> (${p.lives} ❤️)`;
+        }).join('\n') 
+      }
+    )
+    .setColor(playerSanity.get(gameState.hostId)! < 30 ? PRISON_COLORS.danger : PRISON_COLORS.warning);
 
-    if (!target || target.id === player.id) {
-      await interaction.reply({ content: 'Invalid teammate selection.', ephemeral: true });
-      return;
-    }
-
-    if (target.teamUpOffer) {
-      await interaction.reply({ content: 'That player already has a pending team-up offer.', ephemeral: true });
-      return;
-    }
-
-    player.teamUpWith = target.id;
-    target.teamUpOffer = player.id;
-    gameState.createTeamUp(player.id, target.id);
-
-    await interaction.reply({ 
-      content: `Team-up proposed! Waiting for <@${target.id}> to accept...`,
-      ephemeral: false 
+  // Create team up buttons
+  const teamButtons: ActionRowBuilder<ButtonBuilder>[] = [];
+  alivePlayers.forEach(player => {
+    const row = new ActionRowBuilder<ButtonBuilder>();
+    alivePlayers.forEach(target => {
+      if (player.id !== target.id) {
+        const sanity = playerSanity.get(player.id) || 100;
+        row.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`team_${player.id}_${target.id}`)
+            .setLabel(sanity < 40 
+              ? `T̷r̷u̷s̷t̷ ${target.username}?`
+              : `Team with ${target.username}`)
+            .setStyle(sanity < 30 ? ButtonStyle.Danger : ButtonStyle.Primary)
+        );
+      }
     });
+    if (row.components.length > 0) {
+      teamButtons.push(row);
+    }
+  });
 
-    // Create accept/reject buttons for the target player
+  const teamMsg = await channel.send({ embeds: [teamPhaseEmbed], components: teamButtons });
+
+  // Team formation phase (20 seconds)
+  const teamCollector = channel.createMessageComponentCollector({
+    componentType: ComponentType.Button,
+    time: 20000,
+    filter: (i: ButtonInteraction) => i.customId.startsWith('team_')
+  });
+
+  teamCollector.on('collect', async (interaction: ButtonInteraction) => {
+    const [_, proposerId, targetId] = interaction.customId.split('_');
+    if (interaction.user.id !== proposerId) {
+      await interaction.reply({
+        content: playerSanity.get(proposerId)! < 40
+          ? 'Y̷o̷u̷ ̷c̷a̷n̷n̷o̷t̷ ̷f̷o̷r̷c̷e̷ ̷t̷r̷u̷s̷t̷.̷.̷.'
+          : 'You can only make team proposals for yourself.',
+        ephemeral: true
+      });
+      return;
+    }
+
+    const existingTeam = gameState.getTeamUp(proposerId, targetId);
+    if (existingTeam) {
+      await interaction.reply({
+        content: playerSanity.get(proposerId)! < 40
+          ? 'T̷h̷e̷ ̷b̷o̷n̷d̷ ̷a̷l̷r̷e̷a̷d̷y̷ ̷e̷x̷i̷s̷t̷s̷.̷.̷.'
+          : 'A team proposal already exists between these players.',
+        ephemeral: true
+      });
+      return;
+    }
+
+    const teamUp = gameState.createTeamUp(proposerId, targetId);
+    const proposer = alivePlayers.find(p => p.id === proposerId)!;
+    const target = alivePlayers.find(p => p.id === targetId)!;
+
+    // Create accept/reject buttons
     const responseRow = new ActionRowBuilder<ButtonBuilder>()
       .addComponents(
         new ButtonBuilder()
-          .setCustomId(`accept_teamup_${player.id}_${target.id}`)
-          .setLabel('Accept Team-Up')
+          .setCustomId(`accept_${proposerId}_${targetId}`)
+          .setLabel(playerSanity.get(targetId)! < 40 ? 'T̷r̷u̷s̷t̷' : 'Accept')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-          .setCustomId(`reject_teamup_${player.id}_${target.id}`)
-          .setLabel('Reject Team-Up')
+          .setCustomId(`reject_${proposerId}_${targetId}`)
+          .setLabel(playerSanity.get(targetId)! < 40 ? 'B̷e̷t̷r̷a̷y̷' : 'Reject')
           .setStyle(ButtonStyle.Danger)
       );
 
-    await channel.send({
-      content: `<@${target.id}>, <@${player.id}> wants to team up with you! You have 10 seconds to respond.`,
-      components: [responseRow]
+    const proposalEmbed = new EmbedBuilder()
+      .setTitle('🤝 Team Proposal')
+      .setDescription(playerSanity.get(proposerId)! < 40
+        ? `<@${proposerId}> r̷e̷a̷c̷h̷e̷s̷ ̷o̷u̷t̷ ̷t̷o̷ ̷<@${targetId}>...`
+        : `<@${proposerId}> wants to team up with <@${targetId}>!`)
+      .setColor(playerSanity.get(proposerId)! < 30 ? PRISON_COLORS.danger : PRISON_COLORS.primary);
+
+    await interaction.reply({ embeds: [proposalEmbed], components: [responseRow] });
+
+    // Handle accept/reject response
+    const responseCollector = interaction.channel!.createMessageComponentCollector({
+      componentType: ComponentType.Button,
+      time: 10000,
+      filter: (i: ButtonInteraction) => 
+        (i.customId === `accept_${proposerId}_${targetId}` || 
+         i.customId === `reject_${proposerId}_${targetId}`) &&
+        i.user.id === targetId
+    });
+
+    responseCollector.on('collect', async (responseInteraction: ButtonInteraction) => {
+      const isAccepted = responseInteraction.customId === `accept_${proposerId}_${targetId}`;
+
+      if (isAccepted) {
+        await gameState.acceptTeamUp(proposerId, targetId);
+        
+        // Show number input modal to both players
+        const modal = new ModalBuilder()
+          .setCustomId(`number_${proposerId}_${targetId}`)
+          .setTitle(playerSanity.get(targetId)! < 40 ? 'C̷h̷o̷o̷s̷e̷ ̷W̷i̷s̷e̷l̷y̷' : 'Choose Your Number')
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>()
+              .addComponents(
+                new TextInputBuilder()
+                  .setCustomId('number_input')
+                  .setLabel(playerSanity.get(targetId)! < 40 
+                    ? 'E̷n̷t̷e̷r̷ ̷y̷o̷u̷r̷ ̷n̷u̷m̷b̷e̷r̷ ̷(̷1̷-̷1̷0̷0̷)̷'
+                    : 'Enter your number (1-100)')
+                  .setStyle(TextInputStyle.Short)
+                  .setRequired(true)
+              )
+          );
+
+        await responseInteraction.showModal(modal);
+      } else {
+        const rejectEmbed = new EmbedBuilder()
+          .setTitle('💔 Trust Broken')
+          .setDescription(playerSanity.get(targetId)! < 40
+            ? `<@${targetId}> r̷e̷j̷e̷c̷t̷s̷ ̷t̷h̷e̷ ̷b̷o̷n̷d̷.̷.̷.`
+            : `<@${targetId}> has rejected the team proposal.`)
+          .setColor(PRISON_COLORS.danger);
+
+        await responseInteraction.update({ embeds: [rejectEmbed], components: [] });
+      }
+      responseCollector.stop();
+    });
+
+    responseCollector.on('end', async (collected) => {
+      if (collected.size === 0) {
+        const timeoutEmbed = new EmbedBuilder()
+          .setTitle('⏱ Time\'s Up')
+          .setDescription(playerSanity.get(targetId)! < 40
+            ? `<@${targetId}> i̷s̷ ̷l̷o̷s̷t̷ ̷i̷n̷ ̷t̷h̷o̷u̷g̷h̷t̷.̷.̷.`
+            : `<@${targetId}> did not respond to the team proposal.`)
+          .setColor(PRISON_COLORS.warning);
+
+        await interaction.editReply({ embeds: [timeoutEmbed], components: [] });
+      }
     });
   });
 
-  // Handler for number submission
-  GameState.registerModalHandler('betrayal', async (interaction: Interaction) => {
-    if (!interaction.isModalSubmit()) return;
-    
-    const playerId = interaction.customId.replace('betrayal_modal_', '');
-    const player = alivePlayers.find(p => p.id === playerId);
-    
-    if (!player) {
-      await interaction.reply({ content: 'You are not a participant in this round.', ephemeral: true });
-      return;
-    }
-
-    const numberInput = interaction.fields.getTextInputValue('number_input');
-    const num = parseInt(numberInput);
-    
-    if (isNaN(num) || num < 1 || num > 100) {
-      await interaction.reply({ content: 'Please enter a valid number between 1 and 100.', ephemeral: true });
-      return;
-    }
-
-    player.currentNumber = num;
-
-    // If player is in a team, update the team's number
-    const team = gameState.getTeamUp(player.id, player.teamUpWith || '');
-    if (team && team.accepted) {
-      gameState.setTeamUpNumber(team.proposerId, team.targetId, num);
-    }
-
-    await interaction.reply({ content: `You chose ${num}. Wait for results...`, ephemeral: true });
-
-    // Check if all players have submitted
-    const submittedCount = alivePlayers.filter(p => p.currentNumber !== null).length;
-    if (submittedCount === alivePlayers.length) {
-      await channel.send("All players have submitted their numbers! Processing results...");
-    } else {
-      const remaining = alivePlayers.length - submittedCount;
-      await channel.send(`${submittedCount}/${alivePlayers.length} players have submitted. Waiting for ${remaining} more...`);
-    }
-  });
-
-  // Start the round
-  const roundEmbed = new EmbedBuilder()
-    .setTitle(`🔢 Round ${gameState.currentRound} - Betrayal Phase`)
-    .setDescription(`Three players remain. You can play solo or team up!`)
-    .addFields(
-      { name: 'Players', value: alivePlayers.map(p => `<@${p.id}> (${p.lives} ❤️)`).join('\n') },
-      { name: 'Phase 1', value: '**Team Formation (20 seconds)**\nDecide if you want to team up or play solo.' },
-      { name: 'Phase 2', value: '**Number Selection (25 seconds)**\nChoose your numbers - teams must pick the same number!' }
-    )
-    .setColor(0xcc00ff);
-
-  await channel.send({ embeds: [roundEmbed] });
-
-  // Phase 1: Team formation (20 seconds)
-  await teamFormationPhase(channel, client, gameState);
-  
-  // Phase 2: Number submission (25 seconds)
-  await numberSubmissionPhase(channel, client, gameState);
-
-  // Process results
-  await processResults(channel, gameState);
-}
-
-async function teamFormationPhase(channel: TextChannel, client: Client, gameState: GameState): Promise<void> {
-  const alivePlayers = gameState.getAlivePlayers();
-
-  // Create buttons for each player
-  const row = new ActionRowBuilder<ButtonBuilder>();
-  alivePlayers.forEach(player => {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`team_up_${player.id}`)
-        .setLabel(`Team Up (${player.username})`)
-        .setStyle(ButtonStyle.Primary)
-    );
-  });
-
-  const msg = await channel.send({
-    content: '### Team Formation Phase (20 seconds)\nClick your button to propose a team-up, or wait to play solo.',
-    components: [row]
-  });
-
-  // Button collector for team-up proposals
-  const collector = channel.createMessageComponentCollector({
-    componentType: ComponentType.Button,
-    time: 20000,
-    filter: (i: ButtonInteraction) => 
-      alivePlayers.some(p => 
-        (i.customId === `team_up_${p.id}` && i.user.id === p.id) ||
-        i.customId.startsWith('accept_teamup_') ||
-        i.customId.startsWith('reject_teamup_')
-      )
-  });
-
-  collector.on('collect', async (interaction: ButtonInteraction) => {
-    if (interaction.customId.startsWith('team_up_')) {
-      const playerId = interaction.customId.replace('team_up_', '');
-      if (alivePlayers.find(p => p.id === playerId)?.teamUpWith) {
-        await interaction.reply({ content: 'You already have a pending team-up request.', ephemeral: true });
-        return;
-      }
-
-      // Show team-up modal
-      const modal = new ModalBuilder()
-        .setCustomId(`team_modal_${playerId}`)
-        .setTitle('Propose Team-Up')
-        .addComponents(
-          new ActionRowBuilder<TextInputBuilder>()
-            .addComponents(
-              new TextInputBuilder()
-                .setCustomId('teammate_input')
-                .setLabel('Enter teammate\'s name or ID')
-                .setStyle(TextInputStyle.Short)
-                .setPlaceholder('e.g. username or ID')
-                .setRequired(true)
-            )
-        );
-
-      try {
-        await interaction.showModal(modal);
-      } catch (error) {
-        console.error('Modal error:', error);
-        await interaction.reply({ 
-          content: 'Failed to show team-up form. Please try again.',
-          ephemeral: true 
-        });
-      }
-    } else if (interaction.customId.startsWith('accept_teamup_') || interaction.customId.startsWith('reject_teamup_')) {
-      const [proposerId, targetId] = interaction.customId.split('_').slice(-2);
-      const isAccept = interaction.customId.startsWith('accept_teamup_');
-
-      if (interaction.user.id !== targetId) {
-        await interaction.reply({ content: 'This team-up response is not for you.', ephemeral: true });
-        return;
-      }
-
-      if (isAccept) {
-        gameState.acceptTeamUp(proposerId, targetId);
-        await interaction.update({ 
-          content: `Team-up accepted! <@${proposerId}> and <@${targetId}> are now a team!`,
-          components: [] 
-        });
-      } else {
-        // Remove the team-up request
-        const proposer = alivePlayers.find(p => p.id === proposerId);
-        const target = alivePlayers.find(p => p.id === targetId);
-        if (proposer) proposer.teamUpWith = null;
-        if (target) target.teamUpOffer = null;
-
-        await interaction.update({ 
-          content: `Team-up rejected. <@${targetId}> will play solo.`,
-          components: [] 
-        });
-      }
-    }
-  });
-
-  // Wait for phase to end
-  await new Promise(resolve => setTimeout(resolve, 20000));
-  collector.stop();
-
-  // Disable buttons
-  try {
-    const disabledRow = new ActionRowBuilder<ButtonBuilder>();
-    row.components.forEach(btn => 
-      disabledRow.addComponents(ButtonBuilder.from(btn).setDisabled(true))
-    );
-    await msg.edit({ components: [disabledRow] });
-  } catch (error) {
-    console.error('Failed to disable buttons:', error);
-  }
-
-  // Show team formation results
-  const teams: string[] = [];
-  const soloPlayers: string[] = [];
-
-  alivePlayers.forEach(player => {
-    const teamUp = player.teamUpWith ? gameState.getTeamUp(player.id, player.teamUpWith) : null;
-    if (teamUp?.accepted) {
-      if (!teams.includes(`<@${teamUp.proposerId}> and <@${teamUp.targetId}>`)) {
-        teams.push(`<@${teamUp.proposerId}> and <@${teamUp.targetId}>`);
-      }
-    } else if (!soloPlayers.includes(`<@${player.id}>`)) {
-      soloPlayers.push(`<@${player.id}>`);
-    }
-  });
-
-  const formationEmbed = new EmbedBuilder()
-    .setTitle('🤝 Team Formation Results')
-    .setColor(0xcc00ff);
-
-  if (teams.length > 0) {
-    formationEmbed.addFields({ name: 'Teams', value: teams.join('\n') });
-  }
-  if (soloPlayers.length > 0) {
-    formationEmbed.addFields({ name: 'Solo Players', value: soloPlayers.join('\n') });
-  }
-
-  await channel.send({ embeds: [formationEmbed] });
-}
-
-async function numberSubmissionPhase(channel: TextChannel, client: Client, gameState: GameState): Promise<void> {
-  const alivePlayers = gameState.getAlivePlayers();
-
-  // Send a button for each player to submit their number
-  const row = new ActionRowBuilder<ButtonBuilder>();
-  alivePlayers.forEach(player => {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`submit_number_${player.id}`)
-        .setLabel(`Submit Number (${player.username})`)
-        .setStyle(ButtonStyle.Primary)
-    );
-  });
-
-  const msg = await channel.send({
-    content: `### Number Submission Phase (25 seconds)\nPlayers, click your button below to submit your number (1-100).`,
-    components: [row],
-  });
-
-  // Button collector
-  const collector = channel.createMessageComponentCollector({
-    componentType: ComponentType.Button,
-    time: 25000,
-    filter: (i: ButtonInteraction) => alivePlayers.some(p => i.customId === `submit_number_${p.id}` && i.user.id === p.id)
-  });
-
-  collector.on('collect', async (buttonInteraction) => {
-    const playerId = buttonInteraction.customId.replace('submit_number_', '');
-    const player = alivePlayers.find(p => p.id === playerId);
-    
-    if (!player) {
-      await buttonInteraction.reply({ content: 'You are not a participant in this round.', ephemeral: true });
-      return;
-    }
-
-    if (player.currentNumber !== null) {
-      await buttonInteraction.reply({ content: 'You have already submitted your number.', ephemeral: true });
-      return;
-    }
-
-    // Show modal
-    const modal = new ModalBuilder()
-      .setCustomId(`betrayal_modal_${player.id}`)
-      .setTitle('Submit Your Number')
-      .addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(
-          new TextInputBuilder()
-            .setCustomId('number_input')
-            .setLabel('Enter a number between 1 and 100')
-            .setStyle(TextInputStyle.Short)
-            .setPlaceholder('e.g. 42')
-            .setRequired(true)
-        )
+  // After team formation, process results
+  teamCollector.on('end', async () => {
+    // Disable all team buttons
+    const disabledTeamButtons = teamButtons.map(row => {
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+      row.components.forEach(btn => 
+        newRow.addComponents(ButtonBuilder.from(btn as ButtonBuilder).setDisabled(true))
       );
+      return newRow;
+    });
+    await teamMsg.edit({ components: disabledTeamButtons });
 
-    try {
-      await buttonInteraction.showModal(modal);
-    } catch (error) {
-      await buttonInteraction.reply({ content: 'Failed to show number input form. Please try again.', ephemeral: true });
-    }
+    // Process results and apply sanity effects
+    await processBetrayal(channel, gameState, playerSanity);
   });
-
-  // Wait for the phase to end
-  await new Promise(resolve => setTimeout(resolve, 25000));
-  collector.stop();
-
-  // Disable buttons
-  try {
-    const disabledRow = new ActionRowBuilder<ButtonBuilder>();
-    row.components.forEach(btn => 
-      disabledRow.addComponents(ButtonBuilder.from(btn).setDisabled(true))
-    );
-    await msg.edit({ components: [disabledRow] });
-  } catch (error) {
-    console.error('Failed to disable buttons:', error);
-  }
 }
 
-async function processResults(channel: TextChannel, gameState: GameState): Promise<void> {
+async function processBetrayal(
+  channel: TextChannel, 
+  gameState: GameState,
+  playerSanity: Map<string, number>
+): Promise<void> {
   const alivePlayers = gameState.getAlivePlayers();
+  const teams = gameState.teamUps.filter(t => t.accepted);
   
-  // Get players who submitted numbers
-  const playersWithNumbers = alivePlayers.filter(p => p.currentNumber !== null);
+  // Calculate results for each team and solo players
+  const results = new Map<string, number>();
+  const teamResults = new Map<string, {number: number, players: Player[]}>();
   
-  if (playersWithNumbers.length === 0) {
-    await channel.send("No players submitted numbers! Everyone keeps their lives this round.");
+  // Process team submissions
+  teams.forEach(team => {
+    const proposer = alivePlayers.find(p => p.id === team.proposerId);
+    const target = alivePlayers.find(p => p.id === team.targetId);
+    
+    if (proposer && target && proposer.currentNumber !== null && target.currentNumber !== null) {
+      const teamAvg = (proposer.currentNumber + target.currentNumber) / 2;
+      teamResults.set(`${team.proposerId}_${team.targetId}`, {
+        number: teamAvg,
+        players: [proposer, target]
+      });
+    }
+  });
+  
+  // Process solo players
+  alivePlayers.forEach(player => {
+    if (!teams.some(t => t.proposerId === player.id || t.targetId === player.id)) {
+      if (player.currentNumber !== null) {
+        results.set(player.id, player.currentNumber);
+      }
+    }
+  });
+  
+  // Calculate final average
+  const allNumbers = [
+    ...Array.from(results.values()),
+    ...Array.from(teamResults.values()).map(r => r.number)
+  ];
+  
+  if (allNumbers.length === 0) {
+    await channel.send(playerSanity.get(gameState.hostId)! < 40
+      ? 'T̷h̷e̷ ̷v̷o̷i̷d̷ ̷s̷w̷a̷l̷l̷o̷w̷s̷ ̷a̷l̷l̷.̷.̷.'
+      : 'No valid numbers were submitted. Moving to next round...');
     return;
   }
   
-  // Calculate average
-  const average = gameState.calculateAverage() || 0;
+  const average = allNumbers.reduce((a, b) => a + b, 0) / allNumbers.length;
   
-  // Check for team-ups and betrayals
-  const teams: { player1: Player, player2: Player, betrayal: boolean }[] = [];
-  const soloPlayers: Player[] = [];
+  // Find closest to average
+  type Result = {
+    id: string;
+    difference: number;
+    number: number;
+    isTeam: boolean;
+    players: Player[];
+  };
   
-  for (const player of alivePlayers) {
-    // Skip players already processed
-    if (teams.some(t => t.player1.id === player.id || t.player2.id === player.id)) {
-      continue;
-    }
-    
-    const teamUp = player.teamUpWith ? gameState.getTeamUp(player.id, player.teamUpWith) : null;
-    if (teamUp?.accepted) {
-      const teammate = alivePlayers.find(p => p.id === (teamUp.proposerId === player.id ? teamUp.targetId : teamUp.proposerId));
-      if (teammate) {
-        // Check for betrayal
-        const betrayal = player.currentNumber !== teammate.currentNumber;
-        teams.push({ player1: player, player2: teammate, betrayal });
-      }
-    } else {
-      soloPlayers.push(player);
-    }
-  }
+  const allResults: Result[] = [
+    ...Array.from(results.entries()).map(([id, number]) => ({
+      id,
+      difference: Math.abs(number - average),
+      number,
+      isTeam: false,
+      players: [alivePlayers.find(p => p.id === id)!]
+    })),
+    ...Array.from(teamResults.entries()).map(([id, data]) => ({
+      id,
+      difference: Math.abs(data.number - average),
+      number: data.number,
+      isTeam: true,
+      players: data.players
+    }))
+  ];
   
-  // Format player choices for display
-  const playerChoices = alivePlayers.map(p => {
-    const numStr = p.currentNumber !== null ? `${p.currentNumber}` : "❌ No submission";
-    
-    // Check if player is in a team
-    const team = teams.find(t => t.player1.id === p.id || t.player2.id === p.id);
-    if (team) {
-      if (team.betrayal) {
-        const teammate = team.player1.id === p.id ? team.player2 : team.player1;
-        return `<@${p.id}>: ${numStr} (Betrayed <@${teammate.id}>)`;
-      } else {
-        const teammate = team.player1.id === p.id ? team.player2 : team.player1;
-        return `<@${p.id}>: ${numStr} (Team with <@${teammate.id}>)`;
-      }
-    }
-    
-    return `<@${p.id}>: ${numStr}`;
-  }).join('\n');
+  allResults.sort((a, b) => a.difference - b.difference);
+  const winner = allResults[0];
   
-  // Calculate differences to average
-  const playerDifferences = playersWithNumbers.map(player => ({
-    player,
-    number: player.currentNumber!,
-    difference: Math.abs(player.currentNumber! - average)
-  }));
-  
-  // Sort by difference
-  playerDifferences.sort((a, b) => a.difference - b.difference);
-  
-  // Find winner - closest to average
-  let winner: Player | null = null;
-  let loser: Player | null = null;
-  
-  // Check for team victory first
-  const loyalTeam = teams.find(t => !t.betrayal);
-  if (loyalTeam) {
-    // Loyal team automatically wins, third player loses
-    winner = loyalTeam.player1;
-    const thirdPlayer = soloPlayers[0] || alivePlayers.find(p => 
-      p.id !== loyalTeam.player1.id && p.id !== loyalTeam.player2.id
-    );
-    if (thirdPlayer) {
-      loser = thirdPlayer;
-    }
-  } else {
-    // No loyal team - check individual performances
-    const uniqueNumbers = new Set(playerDifferences.map(p => p.number));
-    if (uniqueNumbers.size < playerDifferences.length) {
-      // Handle duplicates - only unique numbers can win
-      const uniquePlayers = playerDifferences.filter(p => 
-        playerDifferences.filter(other => other.number === p.number).length === 1
-      );
-      
-      if (uniquePlayers.length > 0) {
-        uniquePlayers.sort((a, b) => a.difference - b.difference);
-        winner = uniquePlayers[0].player;
-      }
-    } else {
-      // All numbers are unique
-      winner = playerDifferences[0].player;
-    }
-    
-    // Process betrayal outcomes
-    if (teams.length > 0) {
-      const betrayalTeam = teams.find(t => t.betrayal);
-      if (betrayalTeam) {
-        // Determine betrayer and betrayed
-        const betrayer = betrayalTeam.player1.currentNumber !== betrayalTeam.player2.currentNumber ? 
-          (betrayalTeam.player1.currentNumber === winner?.currentNumber ? betrayalTeam.player1 : betrayalTeam.player2) : 
-          null;
-        
-        const betrayed = betrayer === betrayalTeam.player1 ? betrayalTeam.player2 : betrayalTeam.player1;
-        
-        if (betrayer && betrayer === winner) {
-          // Betrayer won - betrayed loses life
-          loser = betrayed;
-        } else {
-          // Betrayal didn't work out - randomly choose between betrayer and betrayed
-          loser = Math.random() < 0.5 ? betrayalTeam.player1 : betrayalTeam.player2;
-        }
-      }
-    }
-  }
-  
-  // If no loser determined yet, winner chooses
-  if (!loser && winner) {
-    loser = await chooseLoser(channel, gameState, winner);
-  } else if (!loser && !winner) {
-    // No clear winner - random player loses
-    loser = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
-  }
-  
-  // Display results
+  // Create results embed with sanity effects
   const resultsEmbed = new EmbedBuilder()
-    .setTitle(`🔢 Round ${gameState.currentRound} Results`)
-    .setDescription(`**Average: ${average.toFixed(2)}**`)
+    .setTitle('🎲 Trust Protocol Results')
+    .setDescription(playerSanity.get(gameState.hostId)! < 40
+      ? `T̷h̷e̷ ̷t̷r̷u̷t̷h̷ ̷e̷m̷e̷r̷g̷e̷s̷:̷ ${average.toFixed(2)}`
+      : `Average: ${average.toFixed(2)}`)
     .addFields(
-      { name: 'Player Numbers', value: playerChoices }
+      { name: 'Numbers', value: allResults.map(r => {
+          const text = r.isTeam
+            ? `Team <@${r.players[0].id}> & <@${r.players[1].id}>: ${r.number}`
+            : `<@${r.id}>: ${r.number}`;
+          return playerSanity.get(r.players[0].id)! < 40
+            ? gameState.applyVisualDistortion(text, playerSanity.get(r.players[0].id)!)
+            : text;
+        }).join('\n')
+      }
     )
-    .setColor(0xcc00ff);
-  
-  if (winner) {
-    resultsEmbed.addFields(
-      { name: 'Winner', value: `<@${winner.id}> chose ${winner.currentNumber}` }
-    );
-  } else {
-    resultsEmbed.addFields(
-      { name: 'Winner', value: 'No clear winner this round' }
-    );
-  }
-  
-  if (loser) {
-    resultsEmbed.addFields(
-      { name: 'Loser', value: `<@${loser.id}> loses a life!` }
-    );
-    
-    // Reduce life
-    loser.lives--;
-    
-    if (loser.lives <= 0) {
-      resultsEmbed.addFields(
-        { name: '☠️ Eliminated', value: `<@${loser.id}> has been eliminated from the game!` }
-      );
-    }
-  }
-  
+    .setColor(playerSanity.get(gameState.hostId)! < 30 ? PRISON_COLORS.danger : PRISON_COLORS.primary);
+
   await channel.send({ embeds: [resultsEmbed] });
-}
 
-async function chooseLoser(channel: TextChannel, gameState: GameState, winner: Player): Promise<Player> {
-  const alivePlayers = gameState.getAlivePlayers().filter(p => p.id !== winner.id);
+  // Handle life reduction for losers
+  const losers = allResults.slice(1).flatMap(r => r.players);
+  for (const loser of losers) {
+    await gameState.reduceLife(loser.id);
+    
+    const eliminationEmbed = new EmbedBuilder()
+      .setTitle(playerSanity.get(loser.id)! < 40 ? '💔 L̷i̷f̷e̷ ̷D̷r̷a̷i̷n̷e̷d̷' : '💔 Life Lost')
+      .setDescription(playerSanity.get(loser.id)! < 40
+        ? `<@${loser.id}> s̷u̷f̷f̷e̷r̷s̷.̷.̷.̷ ${loser.lives} ❤️ r̷e̷m̷a̷i̷n̷.̷.̷.̷`
+        : `<@${loser.id}> lost a life! Lives remaining: ${loser.lives} ❤️`)
+      .setColor(PRISON_COLORS.danger);
 
-  if (alivePlayers.length === 1) {
-    // Only one other player - they automatically lose
-    return alivePlayers[0];
+    if (loser.lives <= 0) {
+      eliminationEmbed.addFields({
+        name: playerSanity.get(loser.id)! < 40 ? 'E̷l̷i̷m̷i̷n̷a̷t̷e̷d̷' : '☠️ Eliminated',
+        value: playerSanity.get(loser.id)! < 40
+          ? `<@${loser.id}> i̷s̷ ̷c̷o̷n̷s̷u̷m̷e̷d̷ ̷b̷y̷ ̷t̷h̷e̷ ̷v̷o̷i̷d̷.̷.̷.̷`
+          : `<@${loser.id}> has been eliminated!`
+      });
+    }
+
+    await channel.send({ embeds: [eliminationEmbed] });
   }
-
-  // Create embed to let winner choose
-  const chooseEmbed = new EmbedBuilder()
-    .setTitle(`🎯 Round ${gameState.currentRound} - Remove a Life`)
-    .setDescription(`<@${winner.id}>, choose a player to lose 1 life:`)
-    .setColor(0xff0000);
-
-  // Create buttons for each possible target
-  const row = new ActionRowBuilder<ButtonBuilder>();
-  alivePlayers.forEach(player => {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`eliminate_${player.id}`)
-        .setLabel(`${player.username} (${player.lives} ❤️)`)
-        .setStyle(ButtonStyle.Danger)
-    );
-  });
-
-  const msg = await channel.send({ embeds: [chooseEmbed], components: [row] });
-
-  // Button collector for 15 seconds
-  return new Promise<Player>(resolve => {
-    const collector = channel.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: 15000,
-      filter: (i: ButtonInteraction) => 
-        i.user.id === winner.id && 
-        i.customId.startsWith('eliminate_')
-    });
-
-    collector.on('collect', async (interaction: ButtonInteraction) => {
-      await interaction.deferUpdate();
-
-      const targetId = interaction.customId.replace('eliminate_', '');
-      const target = alivePlayers.find(p => p.id === targetId);
-
-      if (!target) {
-        await channel.send(`<@${winner.id}> That player is not in the game or already eliminated.`);
-        return;
-      }
-
-      collector.stop();
-      resolve(target);
-
-      // Disable buttons
-      const disabledRow = new ActionRowBuilder<ButtonBuilder>();
-      row.components.forEach(btn => 
-        disabledRow.addComponents(ButtonBuilder.from(btn).setDisabled(true))
-      );
-      await msg.edit({ components: [disabledRow] });
-    });
-
-    collector.on('end', async collected => {
-      if (collected.size === 0) {
-        // Time's up - choose random player
-        const randomTarget = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
-        await channel.send(`Time's up! Randomly selecting <@${randomTarget.id}> to lose a life.`);
-        resolve(randomTarget);
-      }
-
-      // Disable buttons
-      const disabledRow = new ActionRowBuilder<ButtonBuilder>();
-      row.components.forEach(btn => 
-        disabledRow.addComponents(ButtonBuilder.from(btn).setDisabled(true))
-      );
-      await msg.edit({ components: [disabledRow] });
-    });
-  });
 }
 
 

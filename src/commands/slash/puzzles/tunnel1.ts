@@ -1,324 +1,317 @@
 import { RegisterType, SlashCommand } from '../../../handler';
 import {
-  SlashCommandBuilder,
-  type ChatInputCommandInteraction,
-  EmbedBuilder,
-  ActionRowBuilder,
-  TextInputBuilder,
-  ModalBuilder,
-  TextInputStyle,
-  ButtonBuilder,
-  ButtonStyle,
-  ComponentType,
+    SlashCommandBuilder,
+    ChatInputCommandInteraction,
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    ComponentType
 } from 'discord.js';
+import { User, UserDocument } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
-import { User, UserDocument } from 'src/model/user_status';
+import { STORYLINE, PRISON_COLORS, PUZZLE_REWARDS, SANITY_EFFECTS, createProgressBar } from '../../../constants/GAME_CONSTANTS';
 
-// Enhanced direction set with better visuals
-const DIRECTIONS = [
-  { emoji: '⬅️', name: 'Left', action: 'Dodge left!', color: '#3498db' },
-  { emoji: '➡️', name: 'Right', action: 'Swerve right!', color: '#e74c3c' },
-  { emoji: '⬆️', name: 'Forward', action: 'Dash forward!', color: '#2ecc71' },
-  { emoji: '⬇️', name: 'Backward', action: 'Step back!', color: '#f39c12' }
-];
+// Sequence generation helpers
+const DIRECTIONS = ['up', 'down', 'left', 'right'];
+const DIRECTION_EMOJIS = {
+    up: '⬆️',
+    down: '⬇️',
+    left: '⬅️',
+    right: '➡️'
+};
 
-// Intense situations to make the race feel more dynamic
-const TUNNEL_HAZARDS = [
-  "Falling debris!",
-  "Spike trap!",
-  "Laser grid!",
-  "Water surge!",
-  "Flame jets!",
-  "Collapsing floor!",
-  "Electric barrier!",
-  "Swinging blade!"
-];
+interface TunnelGame {
+    sequence: string[];
+    difficulty: 'easy' | 'medium' | 'hard';
+    attempts: number;
+    maxAttempts: number;
+}
 
-function generateRaceSequence(difficulty: number = 1): any[] {
-  const baseLength = 3;
-  const length = baseLength + difficulty;
-  const sequence = [];
-  
-  for (let i = 0; i < length; i++) {
-    const direction = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
-    const hazard = TUNNEL_HAZARDS[Math.floor(Math.random() * TUNNEL_HAZARDS.length)];
-    sequence.push({
-      direction: direction,
-      hazard: hazard
-    });
-  }
-  
-  return sequence;
+function generateSequence(difficulty: 'easy' | 'medium' | 'hard'): string[] {
+    const lengths = { easy: 4, medium: 6, hard: 8 };
+    const length = lengths[difficulty];
+    const sequence: string[] = [];
+    
+    for (let i = 0; i < length; i++) {
+        sequence.push(DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)]);
+    }
+    
+    return sequence;
+}
+
+function formatSequence(sequence: string[], sanity: number): string {
+    let formatted = sequence.map(dir => DIRECTION_EMOJIS[dir as keyof typeof DIRECTION_EMOJIS]).join(' ');
+    
+    // Apply visual distortions based on sanity
+    if (sanity < 50) {
+        const glitchChance = (100 - sanity) / 100;
+        const arrows = Object.values(DIRECTION_EMOJIS);
+        formatted = formatted.split(' ').map(arrow => 
+            Math.random() < glitchChance ? 
+                arrows[Math.floor(Math.random() * arrows.length)] : 
+                arrow
+        ).join(' ');
+    }
+    
+    return formatted;
 }
 
 export default new SlashCommand({
-  registerType: RegisterType.Guild,
+    registerType: RegisterType.Guild,
+    data: new SlashCommandBuilder()
+        .setName('tunnel')
+        .setDescription('Navigate through the digital maze')
+        .addStringOption(option =>
+            option.setName('difficulty')
+                .setDescription('Choose your challenge level')
+                .setRequired(true)
+                .addChoices(
+                    { name: '😌 Easy (4 steps)', value: 'easy' },
+                    { name: '😰 Medium (6 steps)', value: 'medium' },
+                    { name: '😱 Hard (8 steps)', value: 'hard' }
+                ))as SlashCommandBuilder,
 
-  data: new SlashCommandBuilder()
-    .setName('tunnel')
-    .setDescription('Test your reflexes in the deadly tunnel race!')
-    .addIntegerOption(option =>
-      option
-        .setName('difficulty')
-        .setDescription('Choose speed level (1-5)')
-        .setMinValue(1)
-        .setMaxValue(5)
-        .setRequired(false)
-    ) as SlashCommandBuilder,
+    async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+        await interaction.deferReply();
 
-  async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    const difficulty = interaction.options.getInteger('difficulty') || 1;
-    const sequence = generateRaceSequence(difficulty);
-    const flashTime = Math.max(1500 - (difficulty * 200), 600); // Faster flashing at higher difficulties
-    const targetUser = interaction.options.getUser('user') || interaction.user;
+        const user = await User.findOne({ discordId: interaction.user.id });
+        if (!user) {
+            await interaction.editReply('You need to register first! Use `/register` to begin your journey.');
+            return;
+        }
 
-    await interaction.deferReply({ ephemeral: true });
+        // Check for isolation or high suspicion
+        if (user.isInIsolation || user.suspiciousLevel >= 80) {
+            const embed = new EmbedBuilder()
+                .setColor(PRISON_COLORS.danger)
+                .setTitle('⚠️ Access Denied')
+                .setDescription(user.isInIsolation 
+                    ? 'You are currently in isolation. Access to trials is restricted.'
+                    : 'Your suspicious behavior has been noted. Access temporarily restricted.')
+                .setFooter({ text: 'Try again when your status improves' });
+            
+            await interaction.editReply({ embeds: [embed] });
+            return;
+        }
 
-    const UserData = await UserService.getUserData(targetUser.id);
-    if(!UserData){
-      await interaction.editReply({ content: `❌ Seems like you have'nt yet registered to the Game, please type /register to continue.` });
-      return;
-    }
-    // Correct answer is just the directions in sequence
-    const correctAnswer = sequence.map(s => s.direction.name.toLowerCase()).join(' ');
+        const difficulty = interaction.options.getString('difficulty', true) as 'easy' | 'medium' | 'hard';
+        const sequence = generateSequence(difficulty);
+        const game: TunnelGame = {
+            sequence,
+            difficulty,
+            attempts: 0,
+            maxAttempts: difficulty === 'easy' ? 3 : difficulty === 'medium' ? 2 : 1
+        };
 
-    const introEmbed = new EmbedBuilder()
-      .setColor('#ff0000')
-      .setTitle('🏃‍♂️ TUNNEL RACE INITIATED 🏃‍♀️')
-      .setDescription(`**Speed Level: ${difficulty}**\n\n⚠️ **DANGER AHEAD!** ⚠️\n\nQuickly react to the hazards as they appear! Your life depends on it!\n\n*Get ready in 3...*`);
+        // Create initial embed with storyline integration
+        const storylineData = STORYLINE.tunnel1;
+        const initialEmbed = new EmbedBuilder()
+            .setColor(user.sanity < 30 ? PRISON_COLORS.danger : PRISON_COLORS.primary)
+            .setTitle('🌀 The Digital Tunnel')
+            .setDescription(
+                `${storylineData.flavorText}\n\n` +
+                (user.sanity < 50 ? getRandomGlitchMessage() + '\n\n' : '') +
+                '**Memorize the sequence:**\n' +
+                formatSequence(sequence, user.sanity)
+            )
+            .addFields(
+                { name: '🎯 Difficulty', value: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`, inline: true },
+                { name: '💫 Attempts', value: `${game.maxAttempts}`, inline: true },
+                { name: '🧠 Sanity', value: `${createProgressBar(user.sanity, 100)} ${user.sanity}%`, inline: true }
+            )
+            .setFooter({ text: user.sanity < 50 ? 'T̷h̷e̶ ̷w̶a̵l̷l̴s̷ ̶s̷h̵i̷f̷t̵.̷.̶.' : 'Remember the pattern...' });
 
-    await interaction.reply({
-      embeds: [introEmbed],
-      ephemeral: true
-    });
+        // Send initial message with sequence
+        await interaction.editReply({ embeds: [initialEmbed] });
 
-    // Countdown animation
-    await new Promise(r => setTimeout(r, 1000));
-    await interaction.editReply({
-      embeds: [introEmbed.setDescription(`**Speed Level: ${difficulty}**\n\n⚠️ **DANGER AHEAD!** ⚠️\n\nQuickly react to the hazards as they appear! Your life depends on it!\n\n*Get ready in 2...*`)]
-    });
-    
-    await new Promise(r => setTimeout(r, 1000));
-    await interaction.editReply({
-      embeds: [introEmbed.setDescription(`**Speed Level: ${difficulty}**\n\n⚠️ **DANGER AHEAD!** ⚠️\n\nQuickly react to the hazards as they appear! Your life depends on it!\n\n*Get ready in 1...*`)]
-    });
-    
-    await new Promise(r => setTimeout(r, 1000));
-    await interaction.editReply({
-      embeds: [introEmbed.setDescription(`**Speed Level: ${difficulty}**\n\n⚠️ **DANGER AHEAD!** ⚠️\n\nQuickly react to the hazards as they appear! Your life depends on it!\n\n**GO!**`)]
-    });
+        // Wait 5 seconds (or less if sanity is low)
+        const viewTime = Math.max(2000, Math.min(5000, user.sanity * 50));
+        await new Promise(resolve => setTimeout(resolve, viewTime));
 
-    // Flash each direction with dramatic hazard descriptions
-    for (let i = 0; i < sequence.length; i++) {
-      const { direction, hazard } = sequence[i];
-      
-      const stepEmbed = new EmbedBuilder()
-        .setColor(direction.color)
-        .setTitle(`${hazard} ${direction.emoji}`)
-        .setDescription(`**${direction.action.toUpperCase()}**\n\n*${i+1} of ${sequence.length}*`)
-        .setFooter({ text: `Memorize these moves to survive!` });
+        // Create input modal
+        const modal = new ModalBuilder()
+            .setCustomId('sequence_input')
+            .setTitle('Enter the Sequence')
+            .addComponents(
+                new ActionRowBuilder<TextInputBuilder>().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('sequence_input')
+                        .setLabel('Type the directions (up/down/left/right)')
+                        .setPlaceholder('Example: up right down left')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                )
+            );
 
-      await interaction.editReply({ embeds: [stepEmbed] });
-      await new Promise(r => setTimeout(r, flashTime));
-    }
-
-    // Race finished, now prompt for response
-    const responseEmbed = new EmbedBuilder()
-      .setColor('#ffaa00')
-      .setTitle('🏁 Race Complete!')
-      .setDescription('Quick! What moves did you make to survive? Enter the sequence!');
-
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId('hint')
-        .setLabel('🔍 Need a hint?')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId('enter')
-        .setLabel('📝 Enter moves')
-        .setStyle(ButtonStyle.Primary)
-    );
-
-    await interaction.editReply({
-      embeds: [responseEmbed],
-      components: [row]
-    });
-
-    // Handle button interactions
-    const btnCollector = await interaction.channel?.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      filter: (i) => i.user.id === interaction.user.id && (i.customId === 'hint' || i.customId === 'enter'),
-      time: 15000
-    });
-
-    if (!btnCollector) {
-      await interaction.followUp({
-        content: 'Error setting up the game. Please try again.',
-        ephemeral: true
-      });
-      return;
-    }
-
-    btnCollector.on('collect', async (btnInteraction) => {
-      btnCollector.stop();
-      
-      if (btnInteraction.customId === 'hint') {
-        await btnInteraction.reply({
-          content: `📌 **Hint:** First move was **${sequence[0].direction.name}** to avoid the ${sequence[0].hazard}!`,
-          ephemeral: true
-        });
-        
-        const hintRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder()
-            .setCustomId('enter_after_hint')
-            .setLabel('📝 Enter your moves')
-            .setStyle(ButtonStyle.Primary)
-        );
-
+        // Show modal for user input
         await interaction.editReply({
-          components: [hintRow]
+            embeds: [new EmbedBuilder()
+                .setColor(PRISON_COLORS.primary)
+                .setTitle('🌀 Enter the Sequence')
+                .setDescription(
+                    user.sanity < 40 ?
+                    'T̷h̶e̷ ̵p̷a̴t̵h̷ ̵t̶w̷i̸s̷t̴s̷ ̵i̸n̵ ̷y̵o̷u̶r̵ ̴m̶i̶n̶d̸.̶.̵.' :
+                    'The sequence vanishes... What path did you see?'
+                )
+            ],
+            components: []
         });
-        
-        const secondCollector = await interaction.channel?.createMessageComponentCollector({
-          componentType: ComponentType.Button,
-          filter: (i) => i.user.id === interaction.user.id && i.customId === 'enter_after_hint',
-          time: 15000
-        });
-        
-        secondCollector?.on('collect', async (hintBtnInteraction) => {
-          secondCollector.stop();
-          await showModal(hintBtnInteraction, difficulty);
-          await handleModalSubmission(hintBtnInteraction, correctAnswer, sequence, difficulty,UserData);
-        });
-      } else {
-        await showModal(btnInteraction, difficulty);
-        await handleModalSubmission(btnInteraction, correctAnswer, sequence, difficulty,UserData);
-      }
-    });
 
-    btnCollector.on('end', async (collected) => {
-      if (collected.size === 0) {
-        const timeoutEmbed = new EmbedBuilder()
-          .setColor('#ff5555')
-          .setTitle('❌ Too Slow!')
-          .setDescription('You failed to react in time. The tunnel collapses around you!');
-          
-        await interaction.editReply({
-          embeds: [timeoutEmbed],
-          components: []
-        });
-      }
-    });
-  }
+        try {
+            await handleModalSubmission(interaction, sequence, user, game);
+        } catch (error) {
+            console.error('Error in tunnel game:', error);
+            await interaction.followUp({ 
+                content: 'An error occurred while processing your sequence. Please try again.',
+                ephemeral: true 
+            });
+        }
+    }
 });
 
-async function showModal(btnInteraction: any, difficulty: number) {
+async function handleModalSubmission(
+  interaction: ChatInputCommandInteraction, 
+  sequence: string[], 
+  user: UserDocument,
+  game: TunnelGame
+): Promise<void> {
   const modal = new ModalBuilder()
-    .setCustomId('tunnel_modal')
-    .setTitle(`Tunnel Race - Level ${difficulty}`);
-
-  const input = new ActionRowBuilder<TextInputBuilder>().addComponents(
-    new TextInputBuilder()
       .setCustomId('sequence_input')
-      .setLabel('Enter the direction sequence')
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('e.g., left right forward backward')
-      .setRequired(true)
-  );
+      .setTitle('Enter the Sequence')
+      .addComponents(
+          new ActionRowBuilder<TextInputBuilder>()
+              .addComponents(
+                  new TextInputBuilder()
+                      .setCustomId('sequence_answer')
+                      .setLabel('Enter the sequence of directions')
+                      .setPlaceholder('Example: up right down left')
+                      .setStyle(TextInputStyle.Short)
+                      .setRequired(true)
+                      .setMinLength(2)
+                      .setMaxLength(50)
+              )
+      );
 
-  modal.addComponents(input);
-  await btnInteraction.showModal(modal);
-}
-
-async function handleModalSubmission(btnInteraction: any, correctAnswer: string, sequence: any[], difficulty: number,UserData: UserDocument) {
-  const submission = await btnInteraction.awaitModalSubmit({
-    filter: (i: any) => i.customId === 'tunnel_modal' && i.user.id === btnInteraction.user.id,
-    time: 20000,
-  }).catch(() => null);
+  const submission = await interaction.showModal(modal).then(() =>
+      interaction.awaitModalSubmit({
+          time: 60000,
+          filter: i => i.customId === 'sequence_input' && i.user.id === interaction.user.id
+      })
+  ).catch(() => null);
 
   if (!submission) {
-    await btnInteraction.followUp({
-      content: '❌ You took too long to respond. The tunnel collapses!',
-      ephemeral: true
-    });
-    return;
+      await interaction.followUp({ 
+          content: 'You did not submit a sequence in time.',
+          ephemeral: true 
+      });
+      return;
   }
 
-  const answer = submission.fields.getTextInputValue('sequence_input')
-    .trim().toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ');
+  const answer = submission.fields.getTextInputValue('sequence_answer')
+      .trim().toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ');
 
+  // Rest of the validation and scoring logic...
   const userMoves = answer.split(' ');
-  const correctMoves = correctAnswer.split(' ');
+  
+  // Validate input format
+  const validDirections = ['up', 'down', 'left', 'right'];
+  const isValidInput = userMoves.every(move => validDirections.includes(move));
+
+  if (!isValidInput) {
+      await submission.reply({
+          content: 'Invalid input! Please use only: up, down, left, right (separated by spaces)',
+          ephemeral: true
+      });
+      return;
+  }
+
+  // Continue with the rest of your existing logic for scoring and rewards
+  const correctMoves = sequence;
   let correctCount = 0;
-  
+
+  // Calculate accuracy
   for (let i = 0; i < correctMoves.length; i++) {
-    if (userMoves[i] === correctMoves[i]) {
-      correctCount++;
-    }
+      if (userMoves[i] === correctMoves[i]) {
+          correctCount++;
+      }
   }
-  
   const matchRatio = correctCount / sequence.length;
-  const scorePercentage = Math.round(matchRatio * 100);
-  
-  // Calculate rewards based on performance and difficulty
-  const baseReward = 10;
-  const bonusPoints = Math.round(baseReward * difficulty * matchRatio);
-  
-  if (matchRatio >= 0.8) {
-    const successEmbed = new EmbedBuilder()
-      .setColor('#00ff99')
-      .setTitle(matchRatio === 1 ? '🏆 PERFECT ESCAPE!' : '✅ Successful Escape!')
-      .setDescription(`You navigated through ${scorePercentage}% of the tunnel hazards correctly!`)
-      .addFields(
-        { name: 'Performance', value: createPerformanceBar(scorePercentage), inline: false },
-        { name: 'Rewards', value: `🎖️ +${bonusPoints} Merit Points\n🧠 +${Math.round(5 * difficulty * matchRatio)} Sanity Points`, inline: false }
-      );
-      
-    if (matchRatio === 1) {
-      successEmbed.setFooter({ text: '💯 Perfect Score! Speed Bonus Applied!' });
+    const scorePercentage = Math.round(matchRatio * 100);
+    
+    // Calculate rewards based on performance and difficulty
+    const rewards = PUZZLE_REWARDS[game.difficulty];
+    const isSuccess = scorePercentage >= 70;
+    
+    const meritChange = isSuccess ? rewards.success.meritPoints : rewards.failure.meritPoints;
+    const sanityChange = isSuccess ? rewards.success.sanity : rewards.failure.sanity;
+    
+    // Add suspicion for very poor performance
+    const suspicionChange = scorePercentage < 30 ? Math.min(10, user.suspiciousLevel + 5) : 0;
+
+    // Update user stats
+    await Promise.all([
+        UserService.updateUserStats(interaction.user.id, {
+            meritPoints: user.meritPoints + meritChange,
+            sanity: Math.min(Math.max(user.sanity + sanityChange, 0), 100),
+            suspiciousLevel: Math.min(user.suspiciousLevel + suspicionChange, 100),
+            totalGamesPlayed: user.totalGamesPlayed + 1,
+            totalGamesWon: user.totalGamesWon + (isSuccess ? 1 : 0),
+            currentStreak: isSuccess ? user.currentStreak + 1 : 0
+        }),
+        UserService.updatePuzzleProgress(interaction.user.id, 'tunnel1', isSuccess)
+    ]);
+
+    // Create result embed
+    const resultEmbed = new EmbedBuilder()
+        .setColor(isSuccess ? PRISON_COLORS.success : PRISON_COLORS.danger)
+        .setTitle(isSuccess ? '🌟 Tunnel Navigated!' : '💫 Lost in the Maze')
+        .setDescription(
+            `${isSuccess 
+                ? 'You found your way through the digital labyrinth!'
+                : 'The path proved too treacherous...'}\n\n` +
+            `Correct Sequence: ${formatSequence(correctMoves, 100)}\n` +
+            `Your Sequence: ${formatSequence(userMoves, user.sanity)}\n` +
+            `Accuracy: ${scorePercentage}%`
+        )
+        .addFields({
+            name: '📊 Results',
+            value: 
+                `Merit Points: ${meritChange >= 0 ? '+' : ''}${meritChange}\n` +
+                `Sanity: ${sanityChange >= 0 ? '+' : ''}${sanityChange}\n` +
+                `Streak: ${isSuccess ? user.currentStreak + 1 : '0'}` +
+                (suspicionChange > 0 ? `\n⚠️ Suspicion: +${suspicionChange}` : '')
+        })
+        .setFooter({ 
+            text: user.sanity < 30 
+                ? 'T̷h̷e̶ ̷m̶a̵z̷e̴ ̷n̶e̷v̵e̷r̵ ̷e̶n̷d̵s̶.̷.̶.' 
+                : isSuccess ? 'The path becomes clearer...' : 'The tunnels shift and change...' 
+        });
+
+    // Add retry button if attempts remain
+    const components: ActionRowBuilder<ButtonBuilder>[] = [];
+    if (game.attempts < game.maxAttempts && !isSuccess) {
+        const row = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('retry_tunnel')
+                    .setLabel(`Retry (${game.maxAttempts - game.attempts} left)`)
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(user.sanity < 20)
+            );
+        components.push(row);
     }
-      
-    await submission.reply({
-      embeds: [successEmbed],
-      ephemeral: true
-    });
-    
-    UserData.meritPoints += bonusPoints;
-    UserData.sanity += Math.round(5 * difficulty * matchRatio);
-    await UserData.save();
-  } else {
-    // Failure - player made too many mistakes
-    const injuryLevel = 5 - Math.floor(matchRatio * 5);
-    const injuries = ['a few scratches', 'minor wounds', 'serious injuries', 'critical injuries', 'near-fatal wounds'][injuryLevel];
-    
-    const failureEmbed = new EmbedBuilder()
-      .setColor('#ff5555')
-      .setTitle('❌ Tunnel Collapse!')
-      .setDescription(`You only made ${scorePercentage}% of the correct moves and suffered ${injuries}!`)
-      .addFields(
-        { name: 'Performance', value: createPerformanceBar(scorePercentage), inline: false },
-        { name: 'Correct Sequence', value: sequence.map(s => s.direction.emoji + ' ' + s.direction.name).join(' → '), inline: false },
-        { name: 'Penalties', value: '⚠️ +2 Suspicion Points\n🔻 -5 Sanity Points', inline: false }
-      );
-      
-    await submission.reply({
-      embeds: [failureEmbed],
-      ephemeral: true
-    });
-    UserData.suspiciousLevel += 2;
-    UserData.sanity -= 5;
-    await UserData.save();
-  }
+  await submission.reply({
+      embeds: [resultEmbed],
+      components: components
+  });
 }
 
-function createPerformanceBar(percentage: number): string {
-  const blockCount = 10;
-  const filledBlocks = Math.round((percentage / 100) * blockCount);
-  const emptyBlocks = blockCount - filledBlocks;
-  
-  let colorCode = '#ff0000'; // Red for low performance
-  if (percentage >= 80) colorCode = '#00ff00'; // Green for high performance
-  else if (percentage >= 50) colorCode = '#ffff00'; // Yellow for medium performance
-  
-  return `${'█'.repeat(filledBlocks)}${'░'.repeat(emptyBlocks)} ${percentage}%`;
+function getRandomGlitchMessage(): string {
+    return SANITY_EFFECTS.glitchMessages[
+        Math.floor(Math.random() * SANITY_EFFECTS.glitchMessages.length)
+    ];
 }
