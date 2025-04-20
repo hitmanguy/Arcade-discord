@@ -123,7 +123,7 @@ exports.default = new handler_1.SlashCommand({
         }
         const difficulty = interaction.options.getString('difficulty', true);
         const game = createGame(difficulty);
-        const memoryGifPath = (0, path_1.join)(__dirname, '../../../Gifs/Memory.gif');
+        const memoryGifPath = (0, path_1.join)(__dirname, 'Gifs/Memory.gif');
         const memoryGifAttachment = new discord_js_1.AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
         const embed = createBoardEmbed(game, user, difficulty)
             .setImage('attachment://Memory.gif');

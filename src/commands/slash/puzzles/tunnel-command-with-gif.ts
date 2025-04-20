@@ -19,6 +19,20 @@ import { User, UserDocument } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
 import { STORYLINE, PRISON_COLORS, PUZZLE_REWARDS, SANITY_EFFECTS, createProgressBar } from '../../../constants/GAME_CONSTANTS';
 import { join } from 'path';
+import { promises as fs } from 'fs';
+
+async function getTunnelAttachment(): Promise<AttachmentBuilder | null> {
+    const tunnelGifPath = join(__dirname, '..', '..', '..', '..', 'gif', 'tunnel.gif');
+    
+    try {
+      await fs.access(tunnelGifPath);
+      return new AttachmentBuilder(tunnelGifPath, { name: 'tunnel.gif' });
+    } catch (error) {
+      console.error('Tunnel GIF not found:', error);
+      console.error('Attempted path:', tunnelGifPath);
+      return null;
+    }
+  }
 
 // Sequence generation helpers
 const DIRECTIONS = ['up', 'down', 'left', 'right'];
@@ -125,9 +139,7 @@ export default new SlashCommand({
             maxAttempts: difficulty === 'easy' ? 3 : difficulty === 'medium' ? 2 : 1
         };
 
-        // Create the attachment for the tunnel GIF from local file
-        const tunnelGifPath = join(__dirname, 'Gifs/tunnel.gif');
-        const tunnelGifAttachment = new AttachmentBuilder(tunnelGifPath, { name: 'tunnel.gif' });
+        const tunnelGifAttachment = await getTunnelAttachment();
 
         // Create initial embed with storyline integration
         const storylineData = STORYLINE.tunnel1;
@@ -140,18 +152,19 @@ export default new SlashCommand({
                 '**Memorize the sequence:**\n' +
                 formatSequence(sequence, user.sanity)
             )
-            .setImage('attachment://tunnel.gif')  // Reference the attachment
             .addFields(
                 { name: '🎯 Difficulty', value: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`, inline: true },
                 { name: '💫 Attempts', value: `${game.maxAttempts}`, inline: true },
                 { name: '🧠 Sanity', value: `${createProgressBar(user.sanity, 100)} ${user.sanity}%`, inline: true }
             )
             .setFooter({ text: user.sanity < 50 ? 'T̷h̷e̶ ̷w̶a̵l̷l̴s̷ ̶s̷h̵i̷f̷t̵.̷.̶.' : 'Remember the pattern...' });
-
+        if (tunnelGifAttachment) {
+                initialEmbed.setImage('attachment://tunnel.gif');
+        }
         // Send initial message with sequence
         const message = await interaction.editReply({ 
             embeds: [initialEmbed],
-            files: [tunnelGifAttachment]  // Include the GIF file
+            ...(tunnelGifAttachment ? { files: [tunnelGifAttachment] } : {})
         });
 
         // Wait for view time (adjusted based on sanity)
@@ -216,7 +229,7 @@ export default new SlashCommand({
                 collector.stop();
                 
                 // Create a new attachment for the retry
-                const retryTunnelGifAttachment = new AttachmentBuilder(tunnelGifPath, { name: 'tunnel.gif' });
+                const retryTunnelGifAttachment = await getTunnelAttachment();
                 
                 // Show sequence again
                 const retryEmbed = new EmbedBuilder()
@@ -228,18 +241,19 @@ export default new SlashCommand({
                         '**Memorize the sequence:**\n' +
                         formatSequence(sequence, user.sanity)
                     )
-                    .setImage('attachment://tunnel.gif')  // Reference the attachment
                     .addFields(
                         { name: '🎯 Difficulty', value: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`, inline: true },
                         { name: '💫 Attempts', value: `${game.maxAttempts - game.attempts}/${game.maxAttempts}`, inline: true },
                         { name: '🧠 Sanity', value: `${createProgressBar(user.sanity, 100)} ${user.sanity}%`, inline: true }
                     )
                     .setFooter({ text: user.sanity < 50 ? 'T̷h̷e̶ ̷w̶a̵l̷l̴s̷ ̶s̷h̵i̷f̷t̵.̷.̶.' : 'Remember the pattern...' });
-                
+                if (retryTunnelGifAttachment) {
+                    retryEmbed.setImage('attachment://tunnel.gif');
+                }
                 await i.update({ 
                     embeds: [retryEmbed], 
                     components: [],
-                    files: [retryTunnelGifAttachment]  // Include the GIF file
+                    ...(retryTunnelGifAttachment ? { files: [retryTunnelGifAttachment] } : {})
                 });
                 
                 // Wait for view time

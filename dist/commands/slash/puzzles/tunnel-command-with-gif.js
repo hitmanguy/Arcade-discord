@@ -80,7 +80,7 @@ exports.default = new handler_1.SlashCommand({
             attempts: 0,
             maxAttempts: difficulty === 'easy' ? 3 : difficulty === 'medium' ? 2 : 1
         };
-        const tunnelGifPath = (0, path_1.join)(__dirname, '../../../Gifs/tunnel.gif');
+        const tunnelGifPath = (0, path_1.join)(__dirname, 'Gifs/tunnel.gif');
         const tunnelGifAttachment = new discord_js_1.AttachmentBuilder(tunnelGifPath, { name: 'tunnel.gif' });
         const storylineData = GAME_CONSTANTS_1.STORYLINE.tunnel1;
         const initialEmbed = new discord_js_1.EmbedBuilder()

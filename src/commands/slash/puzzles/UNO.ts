@@ -17,6 +17,21 @@ import { User } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
 import { PRISON_COLORS, PUZZLE_REWARDS, SANITY_EFFECTS, STORYLINE, createProgressBar } from '../../../constants/GAME_CONSTANTS';
 import { join } from 'path';
+import { promises as fs } from 'fs';
+
+async function getUnoAttachment(): Promise<AttachmentBuilder | null> {
+    const unoGifPath = join(__dirname, '..', '..', '..', '..', 'gif', 'UNO.gif');
+    
+    try {
+      await fs.access(unoGifPath);
+      return new AttachmentBuilder(unoGifPath, { name: 'UNO.gif' });
+    } catch (error) {
+      console.error('UNO GIF not found:', error);
+      console.error('Attempted path:', unoGifPath);
+      return null;
+    }
+  }
+
 
 const colours = ['Red', 'Green', 'Yellow', 'Blue'];
 const values = [
@@ -145,9 +160,7 @@ export default new SlashCommand({
       return;
     }
 
-    // Create the attachment for the UNO GIF from local file
-    const unoGifPath = join(__dirname, 'Gifs/UNO.gif');
-    const unoGifAttachment = new AttachmentBuilder(unoGifPath, { name: 'UNO.gif' });
+    const unoGifAttachment = await getUnoAttachment();
 
     let deck = shuffleDeck(buildDeck());
     const playerHand = deck.splice(0, 4);
@@ -177,12 +190,15 @@ export default new SlashCommand({
           `Bot Hand: ${'🂠'.repeat(botHand.length)}\n\n` +
           (message ? `${message}\n` : '')
         )
-        .setImage('attachment://UNO.gif') // Add the GIF reference here
         .addFields(
           { name: 'Turn', value: isPlayerTurn ? 'Your Move' : 'Bot Thinking...', inline: true },
           { name: '🧠 Sanity', value: `${createProgressBar(user.sanity, 100)} ${user.sanity}%`, inline: true }
         )
         .setFooter({ text: user.sanity < 50 ? 'T̷h̸e̵ ̷c̶a̵r̷d̴s̷ ̶h̵a̷v̶e̷ ̵e̷y̶e̵s̷.̵.̸.' : 'Play wisely...' });
+
+        if (unoGifAttachment) {
+            embed.setImage('attachment://UNO.gif');
+          }
       
       return embed;
     };
@@ -219,7 +235,7 @@ export default new SlashCommand({
         await interaction.editReply({ 
           embeds: [winEmbed], 
           components: [],
-          files: [unoGifAttachment] // Include the GIF file
+          ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
         });
         return;
       }
@@ -252,7 +268,7 @@ export default new SlashCommand({
         await interaction.editReply({ 
           embeds: [loseEmbed], 
           components: [],
-          files: [unoGifAttachment] // Include the GIF file
+          ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
         });
         return;
       }
@@ -291,7 +307,6 @@ export default new SlashCommand({
         const response = await interaction.editReply({
           embeds: [createGameEmbed()],
           components: [row],
-          files: [unoGifAttachment] // Include the GIF file
         });
 
         const collector = interaction.channel?.createMessageComponentCollector({
@@ -318,7 +333,6 @@ export default new SlashCommand({
                 ? corruptText(`🃏 You drew a card... something feels wrong...`) 
                 : `🃏 You drew \`${newCard}\`.`)],
               components: [],
-              files: [unoGifAttachment] // Include the GIF file
             });
             isPlayerTurn = false;
             return setTimeout(playTurn, 2000);
@@ -336,7 +350,6 @@ export default new SlashCommand({
                 ? corruptText(`T̸h̵e̵ ̶c̸a̵r̶d̸ ̴r̸e̶j̸e̸c̴t̸s̸ ̷y̵o̵u̸.̶.̴.`) 
                 : `❌ \`${chosen}\` can't be played on \`${topCard}\`.`)],
               components: [],
-              files: [unoGifAttachment] // Include the GIF file
             });
             return setTimeout(playTurn, 2000);
           }
@@ -361,7 +374,6 @@ export default new SlashCommand({
             await btnInteraction.update({
               embeds: [createGameEmbed('🎨 Choose a color:')],
               components: [colorSelect],
-              files: [unoGifAttachment] // Include the GIF file
             });
             
             const colorCollector = interaction.channel?.createMessageComponentCollector({
@@ -383,7 +395,6 @@ export default new SlashCommand({
               await selectInt.update({
                 embeds: [createGameEmbed(`You chose **${currentColor}**. You played \`${chosen}\`.`)],
                 components: [],
-                files: [unoGifAttachment] // Include the GIF file
               });
               
               isPlayerTurn = false;
@@ -404,7 +415,6 @@ export default new SlashCommand({
             await btnInteraction.update({
               embeds: [createGameEmbed(`You played \`${chosen}\`. Bot's turn skipped!`)],
               components: [],
-              files: [unoGifAttachment] // Include the GIF file
             });
             return setTimeout(() => {
               isPlayerTurn = true;
@@ -415,7 +425,6 @@ export default new SlashCommand({
           await btnInteraction.update({
             embeds: [createGameEmbed(`✅ You played \`${chosen}\`.`)],
             components: [],
-            files: [unoGifAttachment] // Include the GIF file
           });
           
           isPlayerTurn = false;
@@ -450,7 +459,7 @@ export default new SlashCommand({
                 ? corruptText(timeoutMessage) 
                 : timeoutMessage)],
               components: [],
-              files: [unoGifAttachment] // Include the GIF file
+              ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
             });
 
             isPlayerTurn = false;
@@ -484,7 +493,7 @@ export default new SlashCommand({
                   ? corruptText(timeoutMessage) 
                   : timeoutMessage)],
                 components: [],
-                files: [unoGifAttachment]
+                ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
               });
   
               isPlayerTurn = false;
@@ -576,7 +585,7 @@ export default new SlashCommand({
         await interaction.editReply({
           embeds: [createGameEmbed(botPlayMessage)],
           components: [],
-          files: [unoGifAttachment] // Include the GIF file
+          ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
         });
 
         setTimeout(playTurn, 2000);
@@ -594,11 +603,11 @@ export default new SlashCommand({
             `Bot Hand: ${botHand.length} cards\n\n` +
             `Dealing cards${user.sanity < 30 ? '̶.̵.̸.̵' : '...'}`
           )
-          .setImage('attachment://UNO.gif') // Include the GIF in the initial screen
           .setFooter({ text: 'Game starting...' })
+        .setImage('attachment://UNO.gif') // Keep the GIF in the result screen
       ],
       components: [],
-      files: [unoGifAttachment] // Include the GIF file
+      ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
     });
 
     setTimeout(playTurn, 1000);

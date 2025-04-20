@@ -15,6 +15,20 @@ import { join } from 'path';
 import { User } from '../../../model/user_status';
 import { PRISON_COLORS } from '../../../constants/GAME_CONSTANTS';
 import { UserService } from '../../../services/user_services';
+import { promises as fs } from 'fs';
+
+async function getPuzzleAttachment(): Promise<AttachmentBuilder | null> {
+  const puzzleGifPath = join(__dirname, '..', '..', '..', '..', 'gif', 'puzzle.gif');
+  
+  try {
+    await fs.access(puzzleGifPath);
+    return new AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+  } catch (error) {
+    console.error('Puzzle GIF not found:', error);
+    console.error('Attempted path:', puzzleGifPath);
+    return null;
+  }
+}
 
 function createTimeoutEmbed(sanityLoss: number, suspicionGain: number) {
   return new EmbedBuilder()
@@ -250,18 +264,18 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
     )
   );
   // Create the attachment for the puzzle GIF from local file
-  const puzzleGifPath = join(__dirname, 'Gifs/puzzle.gif');
-  const puzzleGifAttachment = new AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+  const puzzleGifAttachment = await getPuzzleAttachment();
 
   // Create embed with puzzle information and GIF
   const puzzleEmbed = new EmbedBuilder()
     .setColor('#0099ff')
     .setTitle(`🧠 ${current.type.toUpperCase()} PUZZLE`)
     .setDescription(current.question)
-    .setImage('attachment://puzzle.gif') // Reference the attachment
     .setFooter({ text: `Puzzle ${session.index + 1}/5` });
 
-  // Add flavor text if available
+  if (puzzleGifAttachment) {
+    puzzleEmbed.setImage('attachment://puzzle.gif');
+  }
   if (current.flavor) {
     puzzleEmbed.addFields({ name: '\u200B', value: current.flavor });
   }
@@ -269,7 +283,7 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
   
   const message = await interaction.editReply({
     embeds: [puzzleEmbed],
-    files: [puzzleGifAttachment],
+    ...(puzzleGifAttachment ? { files: [puzzleGifAttachment] } : {}),
     components: [row],
   });
 
@@ -402,14 +416,11 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
   const user = await User.findOne({ discordId: interaction.user.id });
   if (!user) return;
 
-  // Create the attachment for the puzzle GIF from local file
-  const puzzleGifPath = join(__dirname, '../../../Gifs/puzzle.gif');
-  const puzzleGifAttachment = new AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+  const puzzleGifAttachment = await getPuzzleAttachment();
 
   const embed = new EmbedBuilder()
     .setTitle('🧩 Puzzle Report')
     .setDescription(`You've completed Level 1 puzzles!`)
-    .setImage('attachment://puzzle.gif') // Reference the attachment
     .addFields(
       { name: '💰 Merit Points', value: session.merit.toString(), inline: true },
       { name: '🧠 Sanity', value: session.sanity.toString(), inline: true },
@@ -418,6 +429,9 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
     .setColor('Blue')
     .setFooter({ text: 'Return tomorrow for more puzzles!' });
 
+    if (puzzleGifAttachment) {
+      embed.setImage('attachment://puzzle.gif');
+    }
   // Create action buttons
   const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -445,7 +459,7 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
 
   const message = await interaction.editReply({
     embeds: [embed],
-    files: [puzzleGifAttachment],
+    ...(puzzleGifAttachment ? { files: [puzzleGifAttachment] } : {}),
     components: [buttonRow]
   });
 

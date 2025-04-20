@@ -14,9 +14,23 @@ import {
   MessageFlags,
   AttachmentBuilder  // Add this import
 }  from 'discord.js';
+import { promises as fs } from 'fs';
 import { Device } from '../../../model/Device_schema';
 import { CharacterAI } from "node_characterai";
 import { join } from 'path';  // Add this import
+
+async function getDeviceAttachment(): Promise<AttachmentBuilder | null> {
+  const deviceGifPath = join(__dirname, '..', '..', '..', '..', 'gif', 'device.gif');
+  
+  try {
+    await fs.access(deviceGifPath);
+    return new AttachmentBuilder(deviceGifPath, { name: 'device.gif' });
+  } catch (error) {
+    console.error('Device GIF not found:', error);
+    console.error('Attempted path:', deviceGifPath);
+    return null;
+  }
+}
 
 const CONTACTS = [
  // { id: 'warden', name: 'Mysterious Warden', emoji: '🕴️' },
@@ -54,8 +68,7 @@ export default new SlashCommand({
       return;
     }
 
-    const deviceGifPath = join(__dirname, 'Gifs/device.gif');
-    const deviceGifAttachment = new AttachmentBuilder(deviceGifPath, { name: 'Device.gif' });
+    const deviceGifAttachment = await getDeviceAttachment();
 
     // 1. Show contact selection menu
     const selectMenu = new StringSelectMenuBuilder()
@@ -74,14 +87,17 @@ export default new SlashCommand({
     const embed = new EmbedBuilder()
       .setColor('#6f42c1')
       .setTitle('📱 Prison Device Interface')
-      .setImage('attachment://Device.gif') 
       .setDescription('Who do you want to contact?')
       .setFooter({ text: 'Select a contact to start chatting.' });
+
+      if (deviceGifAttachment) {
+        embed.setImage('attachment://device.gif');
+      }
 
     await interaction.reply({
       embeds: [embed],
       components: [selectRow],
-      files: [deviceGifAttachment],
+      ...(deviceGifAttachment ? { files: [deviceGifAttachment] } : {}),
       flags: [MessageFlags.Ephemeral]
     });
     // 2. Wait for contact selection

@@ -212,7 +212,7 @@ async function sendPuzzle(interaction, userId) {
         .setCustomId(`puzzle:answer:${opt}:${Date.now()}:${index}`)
         .setLabel(opt)
         .setStyle(discord_js_1.ButtonStyle.Primary)));
-    const puzzleGifPath = (0, path_1.join)(__dirname, '../../../Gifs/puzzle.gif');
+    const puzzleGifPath = (0, path_1.join)(__dirname, 'Gifs/puzzle.gif');
     const puzzleGifAttachment = new discord_js_1.AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
     const puzzleEmbed = new discord_js_1.EmbedBuilder()
         .setColor('#0099ff')

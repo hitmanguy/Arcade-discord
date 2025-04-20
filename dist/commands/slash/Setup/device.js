@@ -30,7 +30,7 @@ exports.default = new handler_1.SlashCommand({
             });
             return;
         }
-        const deviceGifPath = (0, path_1.join)(__dirname, '../../../Gifs/device.gif');
+        const deviceGifPath = (0, path_1.join)(__dirname, 'Gifs/device.gif');
         const deviceGifAttachment = new discord_js_1.AttachmentBuilder(deviceGifPath, { name: 'Device.gif' });
         const selectMenu = new discord_js_1.StringSelectMenuBuilder()
             .setCustomId('device:select_contact')

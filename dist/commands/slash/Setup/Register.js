@@ -3,10 +3,23 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const handler_1 = require("../../../handler");
 const discord_js_1 = require("discord.js");
 const promises_1 = require("node:timers/promises");
+const fs_1 = require("fs");
 const user_services_1 = require("../../../services/user_services");
 const GAME_CONSTANTS_1 = require("../../../constants/GAME_CONSTANTS");
 const Device_schema_1 = require("../../../model/Device_schema");
 const path_1 = require("path");
+const welcomeGifPath = (0, path_1.join)(__dirname, '..', '..', '..', '..', 'gif', 'welcome.gif');
+async function getWelcomeAttachment() {
+    try {
+        await fs_1.promises.access(welcomeGifPath);
+        return new discord_js_1.AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+    }
+    catch (error) {
+        console.error('Welcome GIF not found:', error);
+        console.error('Attempted path:', welcomeGifPath);
+        return null;
+    }
+}
 exports.default = new handler_1.SlashCommand({
     registerType: handler_1.RegisterType.Guild,
     data: new discord_js_1.SlashCommandBuilder()
@@ -59,8 +72,7 @@ exports.default = new handler_1.SlashCommand({
         for (const item of GAME_CONSTANTS_1.STARTER_ITEMS) {
             await user_services_1.UserService.addToInventory(userId, item.itemId, item.name, item.quantity);
         }
-        const welcomeGifPath = (0, path_1.join)(__dirname, '../../../Gifs/welcome.gif');
-        const welcomeGifAttachment = new discord_js_1.AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+        const welcomeGifAttachment = await getWelcomeAttachment();
         const welcomeEmbed = new discord_js_1.EmbedBuilder()
             .setColor(GAME_CONSTANTS_1.PRISON_COLORS.danger)
             .setTitle(`🔒 WELCOME TO INFINITE PRISON - INMATE #${userId.slice(-6)}`)
@@ -91,7 +103,7 @@ exports.default = new handler_1.SlashCommand({
         await interaction.editReply({
             content: `<@${userId}> has been processed and admitted to the Infinite Prison.`,
             embeds: [welcomeEmbed],
-            files: [welcomeGifAttachment],
+            ...(welcomeGifAttachment ? { files: [welcomeGifAttachment] } : {}),
             components: [buttonRow]
         });
         const collector = interaction.channel?.createMessageComponentCollector({
@@ -233,8 +245,7 @@ async function showTutorial(interaction) {
         collector?.on('collect', async (i) => {
             try {
                 await i.deferUpdate();
-                const welcomeGifPath = (0, path_1.join)(__dirname, '../../../Gifs/welcome.gif');
-                const welcomeGifAttachment = new discord_js_1.AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+                const welcomeGifAttachment = await getWelcomeAttachment();
                 const welcomeEmbed = await createWelcomeEmbed(interaction.user.id, interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity", interaction.user.displayAvatarURL());
                 const buttonRow = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
                     .setCustomId('register:tutorial')
@@ -249,7 +260,7 @@ async function showTutorial(interaction) {
                 await i.editReply({
                     content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
                     embeds: [welcomeEmbed],
-                    files: [welcomeGifAttachment],
+                    ...(welcomeGifAttachment ? { files: [welcomeGifAttachment] } : {}),
                     components: [buttonRow]
                 });
             }
@@ -310,8 +321,7 @@ async function showActivities(interaction) {
         collector?.on('collect', async (i) => {
             try {
                 await i.deferUpdate();
-                const welcomeGifPath = (0, path_1.join)(__dirname, '../../../Gifs/welcome.gif');
-                const welcomeGifAttachment = new discord_js_1.AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+                const welcomeGifAttachment = await getWelcomeAttachment();
                 const welcomeEmbed = await createWelcomeEmbed(interaction.user.id, interaction.message.embeds[0].description?.split('"')[1] || "Unknown crimes against humanity", interaction.user.displayAvatarURL());
                 const buttonRow = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
                     .setCustomId('register:tutorial')
@@ -326,7 +336,7 @@ async function showActivities(interaction) {
                 await i.editReply({
                     content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
                     embeds: [welcomeEmbed],
-                    files: [welcomeGifAttachment],
+                    ...(welcomeGifAttachment ? { files: [welcomeGifAttachment] } : {}),
                     components: [buttonRow]
                 });
             }

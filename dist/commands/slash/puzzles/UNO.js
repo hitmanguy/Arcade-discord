@@ -114,7 +114,7 @@ exports.default = new handler_1.SlashCommand({
             await interaction.editReply({ embeds: [embed] });
             return;
         }
-        const unoGifPath = (0, path_1.join)(__dirname, '../../../Gifs/UNO.gif');
+        const unoGifPath = (0, path_1.join)(__dirname, 'Gifs/UNO.gif');
         const unoGifAttachment = new discord_js_1.AttachmentBuilder(unoGifPath, { name: 'UNO.gif' });
         let deck = shuffleDeck(buildDeck());
         const playerHand = deck.splice(0, 4);

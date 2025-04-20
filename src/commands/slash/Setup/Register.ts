@@ -14,10 +14,24 @@ import {
   AttachmentBuilder
 } from 'discord.js';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { promises as fs } from 'fs';
 import { UserService } from '../../../services/user_services';
 import { PRISON_COLORS, STARTER_ITEMS } from '../../../constants/GAME_CONSTANTS';
 import { Device } from '../../../model/Device_schema';
 import { join } from 'path';
+const welcomeGifPath = join(__dirname, '..', '..', '..', '..', 'gif', 'welcome.gif');
+
+async function getWelcomeAttachment(): Promise<AttachmentBuilder | null> {
+  try {
+    // Check if file exists before creating attachment
+    await fs.access(welcomeGifPath);
+    return new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+  } catch (error) {
+    console.error('Welcome GIF not found:', error);
+    console.error('Attempted path:', welcomeGifPath);
+    return null;
+  }
+}
 
 export default new SlashCommand({
   registerType: RegisterType.Guild,
@@ -92,8 +106,8 @@ export default new SlashCommand({
     }
     
     // Create the attachment for the welcome GIF from local file
-    const welcomeGifPath = join(__dirname, 'Gifs/welcome.gif');
-    const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+    const welcomeGifAttachment = await getWelcomeAttachment();
+
     
     // Create welcome embed with GIF
     const welcomeEmbed = new EmbedBuilder()
@@ -137,7 +151,7 @@ export default new SlashCommand({
     await interaction.editReply({
       content: `<@${userId}> has been processed and admitted to the Infinite Prison.`,
       embeds: [welcomeEmbed],
-      files: [welcomeGifAttachment], // Include the GIF file
+      ...(welcomeGifAttachment ? { files: [welcomeGifAttachment] } : {}), // Conditionally include files
       components: [buttonRow]
     });
     
@@ -313,9 +327,8 @@ async function showTutorial(interaction: ButtonInteraction) {
       try {
         await i.deferUpdate();
         
-        // Need to include the welcome GIF again when going back
-        const welcomeGifPath = join(__dirname, 'Gifs/welcome.gif');
-        const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+        const welcomeGifAttachment = await getWelcomeAttachment();
+
             
         const welcomeEmbed = await createWelcomeEmbed(
           interaction.user.id,
@@ -342,7 +355,7 @@ async function showTutorial(interaction: ButtonInteraction) {
         await i.editReply({
           content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
           embeds: [welcomeEmbed],
-          files: [welcomeGifAttachment], // Include the GIF file
+          ...(welcomeGifAttachment ? { files: [welcomeGifAttachment] } : {}), // Conditionally include files
           components: [buttonRow]
         });
       } catch (error) {
@@ -415,9 +428,9 @@ async function showActivities(interaction: ButtonInteraction) {
       try {
         await i.deferUpdate();
         
-        // Need to include the welcome GIF again when going back
-        const welcomeGifPath = join(__dirname, 'Gifs/welcome.gif');
-        const welcomeGifAttachment = new AttachmentBuilder(welcomeGifPath, { name: 'welcome.gif' });
+
+        const welcomeGifAttachment = await getWelcomeAttachment();
+
             
         const welcomeEmbed = await createWelcomeEmbed(
           interaction.user.id,
@@ -443,7 +456,7 @@ async function showActivities(interaction: ButtonInteraction) {
         await i.editReply({
           content: `<@${interaction.user.id}> has been processed and admitted to the Infinite Prison.`,
           embeds: [welcomeEmbed],
-          files: [welcomeGifAttachment], // Include the GIF file
+          ...(welcomeGifAttachment ? { files: [welcomeGifAttachment] } : {}), // Conditionally include files
           components: [buttonRow]
         });
       } catch (error) {
