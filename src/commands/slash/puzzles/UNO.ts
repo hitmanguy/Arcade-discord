@@ -553,6 +553,7 @@ export default new SlashCommand({
   },
 });
 
-function getColorFromPrisonColor(arg0: string): ColorResolvable | null {
-  throw new Error('Function not implemented.');
+function getColorFromPrisonColor(colorKey: keyof typeof PRISON_COLORS): ColorResolvable {
+  return PRISON_COLORS[colorKey] as ColorResolvable;
 }
+

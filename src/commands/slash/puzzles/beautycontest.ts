@@ -16,12 +16,13 @@ import {
     ChatInputCommandInteraction,
     StringSelectMenuBuilder,
     StringSelectMenuInteraction,
-    MessageFlags
+    MessageFlags,
+    ColorResolvable
   } from 'discord.js';
 import { KingsOfDiamondsGame } from '../../../functions/beauty_context_game';
 import { glitchText } from '../../../constants/text_util';
 import { User } from '../../../model/user_status';
-import { STORYLINE } from 'src/constants/GAME_CONSTANTS';
+import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
   
   // Store active games
   const activeGames = new Map<string, KingsOfDiamondsGame>();
@@ -814,6 +815,6 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     // This is called from the main button handler in index.ts
   }
 
-function getColorFromPrisonColor(arg0: string): import("discord.js").ColorResolvable | null {
-  throw new Error('Function not implemented.');
+function getColorFromPrisonColor(colorKey: keyof typeof PRISON_COLORS): ColorResolvable {
+    return PRISON_COLORS[colorKey] as ColorResolvable;
 }

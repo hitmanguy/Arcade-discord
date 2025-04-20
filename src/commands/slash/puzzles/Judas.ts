@@ -105,7 +105,7 @@ export default new SlashCommand({
         // if (completedPuzzles.length < requiredPuzzles.length) {
         //     await interaction.reply({ 
         //         embeds: [new EmbedBuilder()
-        //             .setColor(getColorFromPrisonColor('danger'))
+         //            .setColor(getColorFromPrisonColor('danger'))
         //             .setTitle('⚠️ Access Denied')
         //             .setDescription('The Judas Protocol requires mastery of simpler trials first.')
         //             .addFields({

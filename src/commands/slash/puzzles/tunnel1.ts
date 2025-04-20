@@ -11,7 +11,8 @@ import {
     TextInputStyle,
     ComponentType,
     ModalSubmitInteraction,
-    MessageFlags
+    MessageFlags,
+    ColorResolvable
 } from 'discord.js';
 import { User, UserDocument } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
@@ -476,7 +477,6 @@ function getRandomGlitchMessage(): string {
         Math.floor(Math.random() * SANITY_EFFECTS.glitchMessages.length)
     ];
 }
-function getColorFromPrisonColor(arg0: string): import("discord.js").ColorResolvable | null {
-    throw new Error('Function not implemented.');
+function getColorFromPrisonColor(colorKey: keyof typeof PRISON_COLORS): ColorResolvable {
+    return PRISON_COLORS[colorKey] as ColorResolvable;
 }
-

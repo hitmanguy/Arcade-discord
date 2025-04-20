@@ -440,3 +440,6 @@ function getFailureMessage(): string {
   ];
   return messages[Math.floor(Math.random() * messages.length)];
 }
+function getColorFromPrisonColor(colorKey: keyof typeof PRISON_COLORS): ColorResolvable {
+  return PRISON_COLORS[colorKey] as ColorResolvable;
+}
