@@ -7,13 +7,14 @@ import {
   MessageFlags,
   ComponentType,
   EmbedBuilder,
+  AttachmentBuilder
 } from 'discord.js';
 import { RegisterType, SlashCommand } from '../../../handler';
 import progressCommand from '../Progress/progress'; // adjust path if needed
-
+import { join } from 'path';
 
 const level1Puzzles = [
-  // Ri
+  // Riddles
   {
     type: 'riddle',
     question: "What has hands but cannot clap?",
@@ -21,8 +22,7 @@ const level1Puzzles = [
     answer: 'Clock',
     flavor: '🕰️ *The steady ticking echoes through your cell...*',
     reward: 12,
-    sanityImpact: { success: 5, failure: -3 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 5, failure: -3 }
   },
   {
     id: 'riddle_footsteps',
@@ -32,8 +32,7 @@ const level1Puzzles = [
     answer: 'Footsteps',
     flavor: '👣 *Your steps echo in the empty corridor...*',
     reward: 15,
-    sanityImpact: { success: 5, failure: -3 },
-    image: 'https://i.imgur.com/TZz7Gdb.png'
+    sanityImpact: { success: 5, failure: -3 }
   },
   {
     id: 'riddle_teapot',
@@ -42,18 +41,16 @@ const level1Puzzles = [
     options: ['Teapot', 'Tablet', 'Tent', 'Toilet'],
     answer: 'Teapot',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'riddle_breath',
     type: 'riddle',
-    question: 'I’m light as a feather, yet the strongest man can’t hold me for more than 5 minutes. What am I?',
+    question: "I'm light as a feather, yet the strongest man can't hold me for more than 5 minutes. What am I?",
     options: ['Breath', 'Cloud', 'Shadow', 'Hope'],
     answer: 'Breath',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'riddle_echo',
@@ -62,8 +59,7 @@ const level1Puzzles = [
     options: ['Echo', 'Wind', 'Whistle', 'Voice'],
     answer: 'Echo',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'trivia_paris',
@@ -72,8 +68,7 @@ const level1Puzzles = [
     options: ['Paris', 'Berlin', 'London', 'Madrid'],
     answer: 'Paris',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'trivia_mars',
@@ -82,8 +77,7 @@ const level1Puzzles = [
     options: ['Mars', 'Venus', 'Jupiter', 'Saturn'],
     answer: 'Mars',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'trivia_lion',
@@ -92,8 +86,7 @@ const level1Puzzles = [
     options: ['Lion', 'Tiger', 'Elephant', 'Bear'],
     answer: 'Lion',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'trivia_spider',
@@ -102,8 +95,7 @@ const level1Puzzles = [
     options: ['6', '8', '10', '12'],
     answer: '8',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'trivia_pink',
@@ -112,8 +104,7 @@ const level1Puzzles = [
     options: ['Pink', 'Purple', 'Orange', 'Peach'],
     answer: 'Pink',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'math_19',
@@ -122,8 +113,7 @@ const level1Puzzles = [
     options: ['19', '21', '18', '20'],
     answer: '19',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'math_32',
@@ -132,18 +122,16 @@ const level1Puzzles = [
     options: ['20', '30', '32', '24'],
     answer: '32',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'math_50',
     type: 'math',
-    question: 'What’s half of 100?',
+    question: "What's half of 100?",
     options: ['50', '40', '25', '60'],
     answer: '50',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'math_12',
@@ -152,8 +140,7 @@ const level1Puzzles = [
     options: ['10', '11', '12', '13'],
     answer: '12',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
   {
     id: 'math_5pm',
@@ -162,8 +149,7 @@ const level1Puzzles = [
     options: ['4:00 PM', '5:00 PM', '3:30 PM', '6:00 PM'],
     answer: '5:00 PM',
     reward: 10,
-    sanityImpact: { success: 4, failure: -2 },
-    image: 'https://i.imgur.com/8tJt6x2.png'
+    sanityImpact: { success: 4, failure: -2 }
   },
 ];
 
@@ -221,9 +207,26 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
     )
   );
 
+  // Create the attachment for the puzzle GIF from local file
+  const puzzleGifPath = join(__dirname, '../../../Gifs/puzzle.gif');
+  const puzzleGifAttachment = new AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+
+  // Create embed with puzzle information and GIF
+  const puzzleEmbed = new EmbedBuilder()
+    .setColor('#0099ff')
+    .setTitle(`🧠 ${current.type.toUpperCase()} PUZZLE`)
+    .setDescription(current.question)
+    .setImage('attachment://puzzle.gif') // Reference the attachment
+    .setFooter({ text: `Puzzle ${session.index + 1}/5` });
+
+  // Add flavor text if available
+  if (current.flavor) {
+    puzzleEmbed.addFields({ name: '\u200B', value: current.flavor });
+  }
+
   await interaction.editReply({
-    content: `🧠 **${current.type.toUpperCase()}**
-${current.question}`,
+    embeds: [puzzleEmbed],
+    files: [puzzleGifAttachment], // Include the GIF file
     components: [row],
   });
 
@@ -235,26 +238,37 @@ ${current.question}`,
 
   collector?.on('collect', async (btnInteraction: any) => {
     if (btnInteraction.user.id !== interaction.user.id) {
-      return btnInteraction.editReply({ content: 'This is not your puzzle!', });
+      return btnInteraction.reply({ content: 'This is not your puzzle!', ephemeral: true });
     }
 
     const chosen = btnInteraction.customId.split(':')[2];
     const isCorrect = chosen === current.answer;
 
+    // Update user stats based on answer
     if (isCorrect) {
-      session.merit += 10;
+      session.merit += current.reward;
       session.hint += 1;
+      if (current.sanityImpact?.success) {
+        session.sanity += current.sanityImpact.success;
+      }
     } else {
-      session.sanity -= 5;
+      if (current.sanityImpact?.failure) {
+        session.sanity += current.sanityImpact.failure;
+      }
       session.suspicion += 5;
     }
 
+    // Create result embed
+    const resultEmbed = new EmbedBuilder()
+      .setColor(isCorrect ? '#00ff00' : '#ff0000')
+      .setTitle(isCorrect ? '✅ CORRECT!' : '❌ INCORRECT!')
+      .setDescription(isCorrect 
+        ? `**${current.answer}** was the right answer.\n\n🎉 +${current.reward} Merit | 🧠 +1 Hint${current.sanityImpact?.success ? ` | 😌 +${current.sanityImpact.success} Sanity` : ''}`
+        : `The correct answer was **${current.answer}**.\n\n${current.sanityImpact?.failure ? `🔻 ${current.sanityImpact.failure} Sanity | ` : ''}⚠️ +5 Suspicion`);
+
     await btnInteraction.update({
-      content: isCorrect
-        ? `✅ Correct! **${current.answer}** was the right answer.
-🎉 +10 Merit | 🧠 +1 Hint`
-        : `❌ Wrong! The correct answer was **${current.answer}**.
-🔻 -5 Sanity | ⚠️ +5 Suspicion`,
+      embeds: [resultEmbed],
+      files: [],
       components: [],
     });
 
@@ -275,19 +289,68 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
   const session = userProgressMap.get(userId);
   if (!session) return;
 
+  // Create the attachment for the puzzle GIF from local file
+  const puzzleGifPath = join(__dirname, '../../../Gifs/puzzle.gif');
+  const puzzleGifAttachment = new AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+
   const embed = new EmbedBuilder()
     .setTitle('🧩 Puzzle Report')
     .setDescription(`You've completed Level 1 puzzles!`)
+    .setImage('attachment://puzzle.gif') // Reference the attachment
     .addFields(
-      { name: 'Merit Points', value: session.merit.toString(), inline: true },
-      { name: 'Hints Earned', value: session.hint.toString(), inline: true },
-      { name: 'Sanity Lost', value: session.sanity.toString(), inline: true },
-      { name: 'Suspicion Gained', value: session.suspicion.toString(), inline: true }
+      { name: '💰 Merit Points', value: session.merit.toString(), inline: true },
+      { name: '💡 Hints Earned', value: session.hint.toString(), inline: true },
+      { name: '🧠 Sanity', value: session.sanity.toString(), inline: true },
+      { name: '👁️ Suspicion', value: session.suspicion.toString(), inline: true }
     )
-    .setColor('Blue');
+    .setColor('Blue')
+    .setFooter({ text: 'Return tomorrow for more puzzles!' });
 
+  // Create action buttons
+  const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('puzzle:progress')
+      .setLabel('📊 View Progress')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('puzzle:profile')
+      .setLabel('👤 View Profile')
+      .setStyle(ButtonStyle.Secondary)
+  );
 
   await interaction.editReply({
     embeds: [embed],
+    files: [puzzleGifAttachment], // Include the GIF file
+    components: [buttonRow]
+  });
+
+  // Set up collector for the buttons
+  const collector = interaction.channel?.createMessageComponentCollector({
+    componentType: ComponentType.Button,
+    filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('puzzle:'),
+    time: 60000 // 1 minute
+  });
+
+  collector?.on('collect', async (btnInteraction: any) => {
+    const action = btnInteraction.customId.split(':')[1];
+    
+    switch (action) {
+      case 'progress':
+        await btnInteraction.reply({ content: 'Use the `/progress` command to see your full progress!', ephemeral: true });
+        break;
+      case 'profile':
+        await btnInteraction.reply({ content: 'Use the `/profile view` command to see your full profile!', ephemeral: true });
+        break;
+    }
+  });
+
+  collector?.on('end', async () => {
+    try {
+      await interaction.editReply({
+        components: [] // Remove all components when collector ends
+      });
+    } catch (error) {
+      console.error('Failed to remove components:', error);
+    }
   });
 }
