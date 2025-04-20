@@ -241,28 +241,27 @@ async function createWelcomeEmbed(userId: string, crime: string, userAvatar: str
 
 async function showTutorial(interaction: ButtonInteraction) {
   const tutorialEmbed = new EmbedBuilder()
-    .setColor(PRISON_COLORS.info as ColorResolvable)
-    .setTitle('📖 INFINITE PRISON - TUTORIAL')
-    .setDescription('Welcome to your new home. Here\'s how to survive in the Infinite Prison.')
-    .addFields(
-      { 
-        name: '📊 Core Stats', 
-        value: '• **Survival Days**: How long you\'ve lasted\n• **Sanity**: Mental health (0-100)\n• **Merit Points**: Currency for purchases\n• **Suspicion Level**: How closely guards watch you' 
-      },
-      { 
-        name: '🗓️ Daily Routine', 
-        value: '1. Check in daily with `/daily`\n2. Complete activities to earn merit points\n3. Manage your sanity carefully\n4. Explore new areas of the prison\n5. Trade with other inmates' 
-      },
-      { 
-        name: '⚙️ Game Mechanics', 
-        value: '• Missing check-ins lowers sanity\n• Some activities increase suspicion\n• High suspicion may lead to isolation\n• Collect items to help your survival\n• Form alliances with other inmates' 
-      },
-      { 
-        name: '🏆 How To Win', 
-        value: 'Survive long enough, and you might discover the secrets of the Infinite Prison. Or perhaps... a way to escape?' 
-      }
-    )
-    .setFooter({ text: 'Remember: The walls have eyes. Your choices matter.' });
+  .setColor(PRISON_COLORS.info as ColorResolvable)
+  .setTitle('📖 HOW TO SURVIVE IN THE INFINITE PRISON')
+  .setDescription(
+    'Survival in the Infinite Prison is a daily challenge. To make it, you must:\n\n' +
+    '• **Play Escape Games:** Use `/puzzle`, `/tunnel`, `/uno`, `/matching`, and `/number-game` to progress your escape and unlock new areas.\n' +
+    '• **Manage Your Stats:** Keep your **Sanity** high, **Suspicion** low, and earn **Merit Points** to buy items from the `/shop`.\n' +
+    '• **Use Your Device:** Soon, you\'ll receive a `/device` to communicate with other inmates and uncover secrets.\n' +
+    '• **Balance Your Routine:** Daily check-ins, activities, and smart choices are key. High suspicion leads to isolation. Low sanity brings hallucinations. Merit points are your lifeline.\n\n' +
+    'Explore, strategize, and survive. Only the cleverest inmates will discover the secrets of the Infinite Prison.'
+  )
+  .addFields(
+    { 
+      name: '🏪 Shop & Items', 
+      value: 'Use `/shop` to buy items that help you survive. Manage your inventory with `/inventory`.'
+    },
+    { 
+      name: '📊 Core Stats', 
+      value: '• **Survival Days**: How long you\'ve lasted\n• **Sanity**: Mental health (0-100)\n• **Merit Points**: Currency for purchases\n• **Suspicion Level**: How closely guards watch you'
+    }
+  )
+  .setFooter({ text: 'Remember: The walls have eyes. Your choices matter.' });
   
   const backButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -333,36 +332,36 @@ async function showTutorial(interaction: ButtonInteraction) {
 
 async function showActivities(interaction: ButtonInteraction) {
   const activitiesEmbed = new EmbedBuilder()
-    .setColor(PRISON_COLORS.success as ColorResolvable)
-    .setTitle('🎯 AVAILABLE ACTIVITIES')
-    .setDescription('These commands are available to you in the Infinite Prison:')
-    .addFields(
-      { 
-        name: '📋 Basic Commands', 
-        value: '`/profile view` - View your inmate profile\n`/profile customize` - Customize your profile\n`/daily` - Daily check-in for rewards\n`/inventory` - Manage your items' 
-      },
-      { 
-        name: '🏃‍♂️ Activities', 
-        value: '`/work` - Complete tasks for merit points\n`/explore` - Discover new prison areas\n`/trade` - Exchange items with other inmates\n`/game` - Play mini-games for rewards' 
-      },
-      { 
-        name: '🔍 Special Actions', 
-        value: '`/craft` - Create useful items\n`/socialize` - Interact with other inmates\n`/investigate` - Research prison mysteries\n`/experiment` - Test strange phenomena' 
-      }
-    )
-    .setFooter({ text: 'New activities unlock as you progress and explore more of the prison' });
-  
-  const backButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId('activities:back')
-      .setLabel('⬅️ Back')
-      .setStyle(ButtonStyle.Secondary)
-  );
-  
-  await interaction.update({
-    embeds: [activitiesEmbed],
-    components: [backButton]
-  });
+  .setColor(PRISON_COLORS.success as ColorResolvable)
+  .setTitle('🎯 AVAILABLE ACTIVITIES')
+  .setDescription('Commands and features you can use in the Infinite Prison:')
+  .addFields(
+    { 
+      name: '📋 Basic Commands', 
+      value: '`/profile view` - View your inmate profile\n`/profile customize` - Customize your profile\n`/daily` - Daily check-in for rewards\n`/inventory` - Manage your items\n`/shop` - Buy useful items'
+    },
+    { 
+      name: '📱 Device', 
+      value: '`/device` *(provided to you soon)* - Access your mysterious prison device. Use it to talk to other inmates and uncover secrets.'
+    },
+    { 
+      name: '🕹️ Escape Games', 
+      value: '`/puzzle`, `/tunnel`, `/uno`, `/matching`, `/number-game` - Play games to progress your escape attempts and survive the prison.'
+    }
+  )
+  .setFooter({ text: 'New activities unlock as you progress and explore more of the prison.' });
+
+const backButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  new ButtonBuilder()
+    .setCustomId('activities:back')
+    .setLabel('⬅️ Back')
+    .setStyle(ButtonStyle.Secondary)
+);
+
+await interaction.update({
+  embeds: [activitiesEmbed],
+  components: [backButton]
+});
   
   // Set up collector for the back button
   const collector = interaction.channel?.createMessageComponentCollector({

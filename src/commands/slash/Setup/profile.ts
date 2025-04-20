@@ -116,10 +116,6 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
       .setCustomId('profile:stats')
       .setLabel('📊 Statistics')
       .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId('profile:rooms')
-      .setLabel('🗺️ Explored Areas')
-      .setStyle(ButtonStyle.Secondary),
   );
 
   await interaction.editReply({
@@ -145,9 +141,6 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
         break;
       case 'stats':
         await showStats(i, userData);
-        break;
-      case 'rooms':
-        await showExploredRooms(i, userData);
         break;
       case 'back':
         await i.update({
@@ -219,28 +212,6 @@ async function showStats(interaction: ButtonInteraction, userData: UserDocument)
   });
 }
 
-async function showExploredRooms(interaction: ButtonInteraction, userData: UserDocument) {
-  const roomsEmbed = new EmbedBuilder()
-    .setColor(PRISON_COLORS.neutral as ColorResolvable)
-    .setTitle('🗺️ Explored Areas')
-    .setDescription(userData.exploredRooms.length > 0 ? 
-      userData.exploredRooms.join('\n') : 
-      '*You have not explored any areas yet...*')
-    .setFooter({ text: 'Continue exploring to uncover the secrets of the Infinite Prison' });
-  
-  const backButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId('profile:back')
-      .setLabel('⬅️ Back to Profile')
-      .setStyle(ButtonStyle.Secondary)
-  );
-  
-  // Update with current components - the collector from the parent function handles the timeout
-  await interaction.update({
-    embeds: [roomsEmbed],
-    components: [backButton]
-  });
-}
 
 async function showDetailedStats(interaction: ChatInputCommandInteraction, userData: UserDocument) {
   const loadingEmbed = new EmbedBuilder()
@@ -272,10 +243,6 @@ async function showDetailedStats(interaction: ChatInputCommandInteraction, userD
       .setLabel('🎒 Inventory')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
-      .setCustomId('stats:rooms')
-      .setLabel('🗺️ Explored Areas')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
       .setCustomId('stats:back')
       .setLabel('⬅️ Back')
       .setStyle(ButtonStyle.Secondary)
@@ -302,9 +269,7 @@ async function showDetailedStats(interaction: ChatInputCommandInteraction, userD
       await showProfile(interaction, userData, interaction.guild?.members.cache.get(userData.discordId));
     } else if (action === 'inventory') {
       await showInventory(i, userData);
-    } else if (action === 'rooms') {
-      await showExploredRooms(i, userData);
-    }
+    } 
   });
   
   collector?.on('end', () => {
