@@ -12,6 +12,7 @@ import {
 import { RegisterType, SlashCommand } from '../../../handler';
 import progressCommand from '../Progress/progress'; // adjust path if needed
 import { join } from 'path';
+import { User } from '../../../model/user_status';
 
 const level1Puzzles = [
   // Riddles
@@ -176,6 +177,16 @@ export default new SlashCommand({
     .setDescription('Solve a sequence of level 1 puzzles!'),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    const user = await User.findOne({ discordId: interaction.user.id });
+    if (!user) {
+      await interaction.reply({
+        content: 'You need to register first! Use `/register` to begin your journey.',
+        flags: [MessageFlags.Ephemeral]
+      });
+      return;
+    }
+    user.survivalDays += 1;
+    await user.save();
     const userId = interaction.user.id;
     const puzzles = getRandomPuzzles(5);
     await interaction.deferReply({flags: [MessageFlags.Ephemeral]});
@@ -232,11 +243,14 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
 
   const collector = interaction.channel?.createMessageComponentCollector({
     componentType: ComponentType.Button,
-    time: 15000,
+    time: 30000,
     max: 1,
   });
 
+  let answered = false;
+
   collector?.on('collect', async (btnInteraction: any) => {
+    answered = true;
     if (btnInteraction.user.id !== interaction.user.id) {
       return btnInteraction.reply({ content: 'This is not your puzzle!', ephemeral: true });
     }
@@ -282,6 +296,37 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
         await showFinalOptions(interaction, userId);
       }
     }, 2000);
+  });
+  collector?.on('end', async (collected) => {
+    if (!answered) {
+      // Apply penalty for timeout
+      session.sanity -= 10;
+      session.suspicion += 10;
+
+      const timeoutEmbed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('⏰ You took too long!')
+        .setDescription('You failed to answer in time.\n\n🔻 -10 Sanity | ⚠️ +10 Suspicion');
+
+      try {
+        await interaction.editReply({
+          embeds: [timeoutEmbed],
+          files: [],
+          components: [],
+        });
+      } catch (error) {
+        console.error('Failed to show timeout penalty:', error);
+      }
+
+      session.index += 1;
+      setTimeout(async () => {
+        if (session.index < 5) {
+          await sendPuzzle(interaction, userId);
+        } else {
+          await showFinalOptions(interaction, userId);
+        }
+      }, 2000);
+    }
   });
 }
 

@@ -12,11 +12,13 @@ import {
     ComponentType,
     ModalSubmitInteraction,
     MessageFlags,
-    ColorResolvable
+    ColorResolvable,
+    AttachmentBuilder
 } from 'discord.js';
 import { User, UserDocument } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
 import { STORYLINE, PRISON_COLORS, PUZZLE_REWARDS, SANITY_EFFECTS, createProgressBar } from '../../../constants/GAME_CONSTANTS';
+import { join } from 'path';
 
 // Sequence generation helpers
 const DIRECTIONS = ['up', 'down', 'left', 'right'];
@@ -86,11 +88,15 @@ export default new SlashCommand({
             await interaction.editReply('You need to register first! Use `/register` to begin your journey.');
             return;
         }
+        const suspicous = user.suspiciousLevel>50;
         // const merit = user.meritPoints;
-        // if(merit<50){
-        //     await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
-        //     return;
-        // }
+        // if(merit<150){
+        //       await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
+        //       return;
+        //   }
+        user.survivalDays += 1;
+        await user.save();
+
 
         // Check for isolation or high suspicion
         if (user.isInIsolation || user.suspiciousLevel >= 80) {
@@ -115,6 +121,10 @@ export default new SlashCommand({
             maxAttempts: difficulty === 'easy' ? 3 : difficulty === 'medium' ? 2 : 1
         };
 
+        // Create the attachment for the tunnel GIF from local file
+        const tunnelGifPath = join(__dirname, '../../../Gifs/tunnel.gif');
+        const tunnelGifAttachment = new AttachmentBuilder(tunnelGifPath, { name: 'tunnel.gif' });
+
         // Create initial embed with storyline integration
         const storylineData = STORYLINE.tunnel1;
         const initialEmbed = new EmbedBuilder()
@@ -126,6 +136,7 @@ export default new SlashCommand({
                 '**Memorize the sequence:**\n' +
                 formatSequence(sequence, user.sanity)
             )
+            .setImage('attachment://tunnel.gif')  // Reference the attachment
             .addFields(
                 { name: '🎯 Difficulty', value: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`, inline: true },
                 { name: '💫 Attempts', value: `${game.maxAttempts}`, inline: true },
@@ -134,7 +145,10 @@ export default new SlashCommand({
             .setFooter({ text: user.sanity < 50 ? 'T̷h̷e̶ ̷w̶a̵l̷l̴s̷ ̶s̷h̵i̷f̷t̵.̷.̶.' : 'Remember the pattern...' });
 
         // Send initial message with sequence
-        const message = await interaction.editReply({ embeds: [initialEmbed] });
+        const message = await interaction.editReply({ 
+            embeds: [initialEmbed],
+            files: [tunnelGifAttachment]  // Include the GIF file
+        });
 
         // Wait for view time (adjusted based on sanity)
         const viewTime = Math.max(2000, Math.min(5000, user.sanity * 50));
@@ -161,7 +175,8 @@ export default new SlashCommand({
 
         await interaction.editReply({
             embeds: [promptEmbed],
-            components: [buttonRow]
+            components: [buttonRow],
+            files: []  // Remove the GIF after viewing time
         });
 
         // Create collector for the button
@@ -196,6 +211,9 @@ export default new SlashCommand({
                 game.attempts++;
                 collector.stop();
                 
+                // Create a new attachment for the retry
+                const retryTunnelGifAttachment = new AttachmentBuilder(tunnelGifPath, { name: 'tunnel.gif' });
+                
                 // Show sequence again
                 const retryEmbed = new EmbedBuilder()
                     .setColor(user.sanity < 30 ? PRISON_COLORS.danger : PRISON_COLORS.primary)
@@ -206,6 +224,7 @@ export default new SlashCommand({
                         '**Memorize the sequence:**\n' +
                         formatSequence(sequence, user.sanity)
                     )
+                    .setImage('attachment://tunnel.gif')  // Reference the attachment
                     .addFields(
                         { name: '🎯 Difficulty', value: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`, inline: true },
                         { name: '💫 Attempts', value: `${game.maxAttempts - game.attempts}/${game.maxAttempts}`, inline: true },
@@ -213,7 +232,11 @@ export default new SlashCommand({
                     )
                     .setFooter({ text: user.sanity < 50 ? 'T̷h̷e̶ ̷w̶a̵l̷l̴s̷ ̶s̷h̵i̷f̷t̵.̷.̶.' : 'Remember the pattern...' });
                 
-                await i.update({ embeds: [retryEmbed], components: [] });
+                await i.update({ 
+                    embeds: [retryEmbed], 
+                    components: [],
+                    files: [retryTunnelGifAttachment]  // Include the GIF file
+                });
                 
                 // Wait for view time
                 await new Promise(resolve => setTimeout(resolve, viewTime));
@@ -221,7 +244,8 @@ export default new SlashCommand({
                 // Show button to enter sequence again
                 await interaction.editReply({
                     embeds: [promptEmbed],
-                    components: [buttonRow]
+                    components: [buttonRow],
+                    files: []  // Remove the GIF after viewing time
                 });
                 
                 // Set up a new collector
@@ -275,7 +299,6 @@ export default new SlashCommand({
         interaction.awaitModalSubmit({ filter: modalFilter, time: 120000 })
     .then(async submission => {
         // Properly defer the modal response
-        await submission.deferReply({ flags: MessageFlags.Ephemeral });
 
         // Process answer
         const answer = submission.fields.getTextInputValue('sequence_answer')
@@ -312,8 +335,7 @@ export default new SlashCommand({
                     name: '📌 Requirements',
                     value: `• ${correctLength} directions\n• Valid options: up, down, left, right`
                 });
-
-                    await submission.editReply({ embeds: [failureEmbed] });
+                    await submission.reply({ embeds: [failureEmbed],flags: [MessageFlags.Ephemeral] });
                     collector.stop();
                     return;
                 }
@@ -334,7 +356,7 @@ export default new SlashCommand({
                             `Please try again with exactly ${game.sequence.length} directions.`
                         );
                     
-                    await submission.editReply({ embeds: [lengthEmbed] });
+                    await submission.reply({ embeds: [lengthEmbed] ,flags: [MessageFlags.Ephemeral]});
                     return;
                 }
 

@@ -135,7 +135,7 @@ $ touch .env
 # 5. Add the required variables in .env (see below)
 
 # 6. Start the bot
-$ npm run dev
+$ npm run start:node
 ```
 
 ---
@@ -146,6 +146,8 @@ $ npm run dev
 DISCORD_TOKEN=your_discord_bot_token
 CLIENT_ID=your_bot_client_id
 GUILD_ID=your_test_guild_id (for local testing)
+MONGO_DB = your mongodb id
+CHARACTER_TOKEN = "character.ai token for chatbot"
 ```
 
 ---

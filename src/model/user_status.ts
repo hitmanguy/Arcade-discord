@@ -52,6 +52,7 @@ export interface UserDocument extends Document {
 
   puzzleProgress: PuzzleProgress[];
   currentPuzzle: string;
+  completedAllPuzzles: boolean;
 }
 
 const UserSchema = new Schema<UserDocument>({
@@ -101,7 +102,8 @@ const UserSchema = new Schema<UserDocument>({
     completionCount: { type: Number, default: 0 },
     lastPlayed: { type: Date }
   }],
-  currentPuzzle: { type: String, default: 'puzzles1' }
+  currentPuzzle: { type: String, default: 'puzzles1' },
+  completedAllPuzzles: { type: Boolean, default: false },
 });
 
 export const User = model<UserDocument>("User", UserSchema);

@@ -161,6 +161,8 @@ export default new SlashCommand ({
             await interaction.editReply('You need to register first! Use `/register` to begin your journey.');
             return;
         }
+        user.survivalDays+=1;
+        await user.save();
         // const merit = user.meritPoints;
         // if(merit<100){
         //     await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');

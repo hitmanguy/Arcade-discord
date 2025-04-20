@@ -54,7 +54,8 @@ function shuffleDeck(deck: string[]): string[] {
   return deck;
 }
 
-function canPlay(topCard: string, card: string): boolean {
+function canPlay(topCard: string | undefined, card: string | undefined): boolean {
+  if (!topCard || !card) return false;
   if (card.includes('Wild') || card.includes('Draw Four')) return true;
   const [topColour, ...topVal] = topCard.split(' ');
   const topValue = topVal.join(' ');
@@ -118,12 +119,14 @@ export default new SlashCommand({
       await interaction.editReply('You need to register first! Use `/register` to begin your journey.');
       return;
     }
+    const suspicous = user.suspiciousLevel>50;
     // const merit = user.meritPoints;
     // if(merit<150){
     //       await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
     //       return;
     //   }
-
+    user.survivalDays += 1;
+    await user.save();
     // Check for isolation or high suspicion
     if (user.isInIsolation || user.suspiciousLevel >= 80) {
       const embed = new EmbedBuilder()
@@ -273,9 +276,9 @@ export default new SlashCommand({
         }
 
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          (playable.length ? playable : ['Draw Card']).map(card =>
+          (playable.length ? playable : ['Draw Card']).map((card, index) =>
             new ButtonBuilder()
-              .setCustomId(`uno:play:${card}`)
+              .setCustomId(`uno:play:${card}:${Date.now()}:${index}`) // Add unique identifier
               .setLabel(user.sanity < 50 ? applyCardDistortion(card, user.sanity) : card)
               .setStyle(ButtonStyle.Primary)
           )
@@ -295,10 +298,12 @@ export default new SlashCommand({
 
         collector?.on('collect', async (btnInteraction) => {
           if (btnInteraction.user.id !== interaction.user.id) {
-            return btnInteraction.reply({ content: 'This is not your game!', flags: [MessageFlags.Ephemeral] });
+            return btnInteraction.reply({ 
+              content: 'This is not your game!', 
+              flags: [MessageFlags.Ephemeral] 
+            });
           }
-
-          const chosen = btnInteraction.customId.split(':')[2];
+          const [, , chosen] = btnInteraction.customId.split(':');
 
           if (chosen === 'Draw Card') {
             reshuffleIfNeeded(deck, discardPile);
@@ -446,6 +451,43 @@ export default new SlashCommand({
 
             isPlayerTurn = false;
             setTimeout(playTurn, 2000);
+          }
+        });
+        collector?.on('end', (collected) => {
+          if (collected.size === 0 && !gameOver) {
+            try {
+              UserService.updateUserStats(interaction.user.id, {
+                sanity: Math.max(user.sanity - 3, 0),
+                suspiciousLevel: Math.min(user.suspiciousLevel + 5, 100)
+              });
+  
+              let timeoutMessage = '';
+              if (playable.length > 0) {
+                const randomPlay = playable[Math.floor(Math.random() * playable.length)];
+                const idx = playerHand.indexOf(randomPlay);
+                if (idx !== -1) playerHand.splice(idx, 1);
+                discardPile.push(randomPlay);
+                topCard = randomPlay;
+                currentColor = randomPlay.split(' ')[0];
+                timeoutMessage = `You hesitated! A random card \`${randomPlay}\` was played for you.`;
+              } else {
+                const newCard = deck.shift();
+                if (newCard) playerHand.push(newCard);
+                timeoutMessage = `Time's up! You drew \`${newCard ?? 'nothing'}\`.`;
+              }
+              interaction.editReply({
+                embeds: [createGameEmbed(user.sanity < 40 
+                  ? corruptText(timeoutMessage) 
+                  : timeoutMessage)],
+                components: [],
+                files: [unoGifAttachment]
+              });
+  
+              isPlayerTurn = false;
+              setTimeout(playTurn, 2000);
+            } catch (err) {
+              console.error('Error in UNO collector end:', err);
+            }
           }
         });
       } else {
