@@ -116,6 +116,11 @@ export default new SlashCommand({
       await interaction.editReply('You need to register first! Use `/register` to begin your journey.');
       return;
     }
+    const merit = user.meritPoints;
+    if(merit<150){
+          await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
+          return;
+      }
 
           const requiredPuzzles = ['puzzles1', 'tunnel1', 'matchingpairs'];
         const completedPuzzles = user.puzzleProgress.filter(p => requiredPuzzles.includes(p.puzzleId) && p.completed);

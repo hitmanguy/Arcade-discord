@@ -56,6 +56,11 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
                     });
                     return;
                 }
+                const merit = user.meritPoints;
+        if(merit<200){
+            await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
+            return;
+        }
 
         const requiredPuzzles = ['puzzles1', 'tunnel1', 'matchingpairs', 'UNO'];
         const completedPuzzles = user.puzzleProgress.filter(p => requiredPuzzles.includes(p.puzzleId) && p.completed);
