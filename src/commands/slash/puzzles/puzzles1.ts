@@ -250,7 +250,7 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
     )
   );
   // Create the attachment for the puzzle GIF from local file
-  const puzzleGifPath = join(__dirname, '../../../Gifs/puzzle.gif');
+  const puzzleGifPath = join(__dirname, 'Gifs/puzzle.gif');
   const puzzleGifAttachment = new AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
 
   // Create embed with puzzle information and GIF

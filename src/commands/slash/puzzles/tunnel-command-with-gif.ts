@@ -126,7 +126,7 @@ export default new SlashCommand({
         };
 
         // Create the attachment for the tunnel GIF from local file
-        const tunnelGifPath = join(__dirname, '../../../Gifs/tunnel.gif');
+        const tunnelGifPath = join(__dirname, 'Gifs/tunnel.gif');
         const tunnelGifAttachment = new AttachmentBuilder(tunnelGifPath, { name: 'tunnel.gif' });
 
         // Create initial embed with storyline integration

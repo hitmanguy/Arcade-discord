@@ -146,7 +146,7 @@ export default new SlashCommand({
     }
 
     // Create the attachment for the UNO GIF from local file
-    const unoGifPath = join(__dirname, '../../../Gifs/UNO.gif');
+    const unoGifPath = join(__dirname, 'Gifs/UNO.gif');
     const unoGifAttachment = new AttachmentBuilder(unoGifPath, { name: 'UNO.gif' });
 
     let deck = shuffleDeck(buildDeck());

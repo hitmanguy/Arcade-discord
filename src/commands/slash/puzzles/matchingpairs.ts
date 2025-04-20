@@ -191,7 +191,7 @@ export default new SlashCommand ({
         const game = createGame(difficulty);
 
         // Create the attachment for the memory GIF from local file
-        const memoryGifPath = join(__dirname, '../../../Gifs/Memory.gif');
+        const memoryGifPath = join(__dirname, 'Gifs/Memory.gif');
         const memoryGifAttachment = new AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
 
         // Initial board display

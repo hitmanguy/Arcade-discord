@@ -54,7 +54,7 @@ export default new SlashCommand({
       return;
     }
 
-    const deviceGifPath = join(__dirname, '../../../Gifs/device.gif');
+    const deviceGifPath = join(__dirname, 'Gifs/device.gif');
     const deviceGifAttachment = new AttachmentBuilder(deviceGifPath, { name: 'Device.gif' });
 
     // 1. Show contact selection menu
