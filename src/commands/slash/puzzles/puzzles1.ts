@@ -214,7 +214,7 @@ export default new SlashCommand({
     }
     const suspicous = user.suspiciousLevel>50;
     if(suspicous){
-      await interaction.editReply('You are too suspicious to play this game. Try again later.');
+      await interaction.reply('You are too suspicious to play this game. Try again later.');
       return;
     }
     user.survivalDays += 1;
@@ -432,12 +432,12 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
   await Promise.all([
               UserService.updateUserStats(interaction.user.id, {
               meritPoints: user.meritPoints + session.merit ,
-              sanity: Math.min(Math.max(user.sanity + session.sanity, 0), 100),
+              sanity: Math.min(Math.max(user.sanity + 0.5*(session.sanity), 0), 100),
               suspiciousLevel: Math.min(user.suspiciousLevel + session.suspicion, 100),
               totalGamesPlayed: user.totalGamesPlayed + 1,
               totalGamesWon: user.totalGamesWon + 1 ,
               currentStreak: user.currentStreak + 1
-                        }),
+          }),
               UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', true)
   ]);
 

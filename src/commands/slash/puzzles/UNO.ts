@@ -120,6 +120,10 @@ export default new SlashCommand({
       return;
     }
     const suspicous = user.suspiciousLevel>50;
+    if(suspicous){
+        await interaction.editReply('You are too suspicious to play this game. Try again later.');
+        return;
+      }
     // const merit = user.meritPoints;
     // if(merit<150){
     //       await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');

@@ -63,23 +63,23 @@ const GAME_REWARDS = {
     )as SlashCommandBuilder,
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
          const user = await User.findOne({ discordId: interaction.user.id });
-                if (!user) {
-                    await interaction.reply({
-                        content: 'You must be registered to use this command. Use `/register` first.',
-                        ephemeral: true
-                    });
-                    return;
-                }
-                const suspicous = user.suspiciousLevel>50;
-                if(suspicous){
-                  await interaction.editReply('You are too suspicious to play this game. Try again later.');
-                  return;
-                }
-                    const merit = user.meritPoints;
-                    if(merit<100){
-                        await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
-                        return;
-                    }
+          if (!user) {
+          await interaction.reply({
+            content: 'You must be registered to use this command. Use `/register` first.',
+            flags: [MessageFlags.Ephemeral]
+          });
+          return;
+        }
+        // const suspicous = user.suspiciousLevel>50;
+        // if(suspicous){
+        //   await interaction.reply('You are too suspicious to play this game. Try again later.');
+        //   return;
+        // }
+        // const merit = user.meritPoints;
+        // if(merit<100){
+        //   await interaction.reply('You dont have enough merit points to play this. You can play the previous game to earn more points');
+        //   return;
+        // }
         user.survivalDays+=1;
         await user.save();
         const subcommand = interaction.options.getSubcommand();
