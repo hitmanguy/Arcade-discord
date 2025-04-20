@@ -155,8 +155,7 @@ CHARACTER_TOKEN = "character.ai token for chatbot"
 ---
 ## 📽️ Demo Run Video
 
-[![Demo Run Video](https://img.youtube.com/vi/VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=VIDEO_ID)
-
+[![Demo Run Video](https://img.youtube.com/vi/oVWxkRcj_NA/0.jpg)](https://www.youtube.com/watch?v=oVWxkRcj_NA)
 
 ---
 ## 👨‍💻 Contributors
