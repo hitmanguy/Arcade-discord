@@ -20,7 +20,7 @@ export default new SlashCommand({
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
     const player = await User.findOne({ discordId: interaction.user.id });
     if (!player) {
-        await interaction.reply({ content: 'Player not found.', ephemeral: true });
+        await interaction.reply({ content: 'Player not found.',  flags: [MessageFlags.Ephemeral], });
         return;
       }
       
@@ -94,7 +94,7 @@ export default new SlashCommand({
       }
 
       await player.save();
-      await btnInt.reply({ content: response, ephemeral: true });
+      await btnInt.reply({ content: response,  flags: [MessageFlags.Ephemeral], });
     });
   },
 });

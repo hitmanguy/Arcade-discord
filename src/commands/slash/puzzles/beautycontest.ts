@@ -482,10 +482,6 @@ import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
         interaction.client.removeListener('interactionCreate', modalHandler);
         await processRoundResults(interaction, game, channelId);
     });
-
-    buttonCollector.on('end', async () => {
-        await processRoundResults(interaction, game, channelId);
-    });
 }
   
   // Replace the createNumberSelectionButtons function with:
@@ -638,7 +634,7 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     // Start the next round
     setTimeout(() => {
       startRound(interaction, game, channelId);
-    }, 5000);
+    }, 30000);
   }
 
   async function handleLifeReduction(interaction: ButtonInteraction, game: KingsOfDiamondsGame) {

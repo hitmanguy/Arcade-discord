@@ -192,6 +192,7 @@ export default new SlashCommand({
   async execute(interaction: ChatInputCommandInteraction) {
     const userId = interaction.user.id;
     const puzzles = getRandomPuzzles(5);
+    await interaction.deferReply({flags: [MessageFlags.Ephemeral]});
 
     userProgressMap.set(userId, {
       index: 0,
@@ -220,11 +221,10 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
     )
   );
 
-  await interaction.reply({
+  await interaction.editReply({
     content: `🧠 **${current.type.toUpperCase()}**
 ${current.question}`,
     components: [row],
-    flags: [MessageFlags.Ephemeral],
   });
 
   const collector = interaction.channel?.createMessageComponentCollector({
@@ -235,7 +235,7 @@ ${current.question}`,
 
   collector?.on('collect', async (btnInteraction: any) => {
     if (btnInteraction.user.id !== interaction.user.id) {
-      return btnInteraction.reply({ content: 'This is not your puzzle!', ephemeral: true });
+      return btnInteraction.editReply({ content: 'This is not your puzzle!', });
     }
 
     const chosen = btnInteraction.customId.split(':')[2];
@@ -286,60 +286,8 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
     )
     .setColor('Blue');
 
-  const continueRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId('puzzle:continue:tunnel')
-      .setLabel('🚇 Enter Tunnel')
-      .setStyle(session.merit >= 50 ? ButtonStyle.Success : ButtonStyle.Secondary)
-      .setDisabled(session.merit < 50),
 
-    new ButtonBuilder()
-      .setCustomId('puzzle:continue:retry')
-      .setLabel('🔁 Play Again')
-      .setStyle(ButtonStyle.Primary)
-  );
-
-  await interaction.followUp({
+  await interaction.editReply({
     embeds: [embed],
-    components: [continueRow],
-    ephemeral: true,
   });
-
-  const collector = interaction.channel?.createMessageComponentCollector({
-    componentType: ComponentType.Button,
-    time: 15000,
-    max: 1,
-  });
-
-  collector?.on('collect', async (btnInteraction: any) => {
-    if (btnInteraction.user.id !== interaction.user.id) {
-      return btnInteraction.reply({ content: 'This is your puzzle journey!', ephemeral: true });
-    }
-
-    if (btnInteraction.customId === 'puzzle:continue:retry') {
-      userProgressMap.delete(userId);
-      const newPuzzles = getRandomPuzzles(5);
-    
-      userProgressMap.set(userId, {
-        index: 0,
-        puzzles: newPuzzles,
-        merit: 0,
-        hint: 0,
-        sanity: 0,
-        suspicion: 0,
-      });
-    
-      return await sendPuzzle(btnInteraction, userId);
-    }
-    
-    if (btnInteraction.customId === 'puzzle:continue:tunnel') {
-      return await btnInteraction.reply({
-        content: '🚇 Entering **The Tunnel**...\n> _[Tunnel command to be triggered here]_',
-        ephemeral: true,
-      });
-    }
-  });
-
-  // Optionally trigger progress slash command
-  await progressCommand.execute(interaction);
 }

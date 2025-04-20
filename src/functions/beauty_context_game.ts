@@ -51,12 +51,12 @@ export interface KingsOfDiamondsPlayer {
       this.players.push({
         id: player.id,
         name: player.name,
-        score: 0,
+        score: 10,
         sanity: player.sanity,
         hasSelected: false,
         selectedNumber: null,
         isEliminated: false,
-        extraLives: 10 // Initialize with 10 lives
+        extraLives: 1 // Initialize with 10 lives
       });
   
       return true;
@@ -153,9 +153,9 @@ export interface KingsOfDiamondsPlayer {
       if (!specialRuleApplied) {
         // Apply default rules
         // Case: All players chose the same number
-        if (numbers.every(n => n === numbers[0])) {
+        if (numbers.some(n => n === numbers[0])) {
           activePlayers.forEach(p => p.score--);
-          message = 'All players chose the same number! Everyone loses a point.';
+          message = 'some players chose the same number! Everyone loses a point.';
         } else {
           // Find the player(s) closest to Regal's number
           let smallestDiff = Infinity;

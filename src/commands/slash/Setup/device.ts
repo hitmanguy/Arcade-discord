@@ -40,6 +40,7 @@ export default new SlashCommand({
     .setDescription('Access your mysterious prison device'),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    let bot_type = true;
     const device = await Device.findOne({ discordId: interaction.user.id });
 
     if (!device || !device.activated) {
@@ -140,6 +141,7 @@ export default new SlashCommand({
         } else {
           await selectInteraction.followUp({ content: "No messages yet",flags: [MessageFlags.Ephemeral] });
         }
+        bot_type = false;
       });
 
     await new Promise(resolve => setTimeout(resolve, 1000)); // Optional: Add a small delay for better UX
@@ -154,6 +156,11 @@ export default new SlashCommand({
       : undefined;
 
     collector?.on('collect', async (msg) => {
+      if (bot_type){
+        msg.reply({ content: 'Please wait for the bot to respond.', allowedMentions: { repliedUser: false } });
+        return;
+      }
+      bot_type = true;
       // Echo message in chat (simulate reply)
       const characterAI = new CharacterAI();
       characterAI.authenticate(process.env.CHARACTER_TOKEN!).then(async() => {
@@ -176,6 +183,7 @@ export default new SlashCommand({
           await msg.channel.sendTyping();
         }
         msg.reply((await response).content);
+        bot_type = false;
       })
       // await msg.reply({
       //   content: `*${selectedContact.name} is typing...*`,
