@@ -2,10 +2,23 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const handler_1 = require("../../../handler");
 const discord_js_1 = require("discord.js");
+const fs_1 = require("fs");
 const user_status_1 = require("../../../model/user_status");
 const user_services_1 = require("../../../services/user_services");
 const GAME_CONSTANTS_1 = require("../../../constants/GAME_CONSTANTS");
 const path_1 = require("path");
+async function getMemoryAttachment() {
+    const memoryGifPath = (0, path_1.join)(__dirname, '..', '..', '..', '..', 'gif', 'Memory.gif');
+    try {
+        await fs_1.promises.access(memoryGifPath);
+        return new discord_js_1.AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
+    }
+    catch (error) {
+        console.error('Memory GIF not found:', error);
+        console.error('Attempted path:', memoryGifPath);
+        return null;
+    }
+}
 const CARD_EMOJIS = ['🌟', '🎯', '💫', '🔮', '⚡', '🎲', '🎪', '🎭'];
 function createGame(difficulty) {
     const pairs = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 6 : 8;
@@ -123,14 +136,15 @@ exports.default = new handler_1.SlashCommand({
         }
         const difficulty = interaction.options.getString('difficulty', true);
         const game = createGame(difficulty);
-        const memoryGifPath = (0, path_1.join)(__dirname, 'Gifs/Memory.gif');
-        const memoryGifAttachment = new discord_js_1.AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
-        const embed = createBoardEmbed(game, user, difficulty)
-            .setImage('attachment://Memory.gif');
+        const memoryGifAttachment = await getMemoryAttachment();
+        const embed = createBoardEmbed(game, user, difficulty);
+        if (memoryGifAttachment) {
+            embed.setImage('attachment://Memory.gif');
+        }
         const components = createGameButtons(game, user);
         const message = await interaction.editReply({
             embeds: [embed],
-            files: [memoryGifAttachment],
+            ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
             components: components
         });
         const collector = message.createMessageComponentCollector({
@@ -207,7 +221,7 @@ exports.default = new handler_1.SlashCommand({
                             }),
                             user_services_1.UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', isSuccess)
                         ]);
-                        const memoryGifAttachment = new discord_js_1.AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
+                        const memoryGifAttachment = await getMemoryAttachment();
                         const resultEmbed = new discord_js_1.EmbedBuilder()
                             .setColor(isSuccess ? GAME_CONSTANTS_1.PRISON_COLORS.success : GAME_CONSTANTS_1.PRISON_COLORS.danger)
                             .setTitle(isSuccess ? '🌟 Memory Protocol Complete!' : '💫 Protocol Failed')
@@ -223,24 +237,26 @@ exports.default = new handler_1.SlashCommand({
                                 `Streak: ${isSuccess ? user.currentStreak + 1 : '0'}` +
                                 (suspicionChange > 0 ? `\n⚠️ Suspicion: +${suspicionChange}` : '')
                         })
-                            .setImage('attachment://Memory.gif')
                             .setFooter({
                             text: user.sanity < 30
                                 ? 'T̷h̷e̶ ̷s̶y̵m̷b̴o̷l̶s̷ ̵h̷a̵u̷n̷t̵ ̷y̶o̵u̷.̶.̶.'
                                 : isSuccess ? 'Your memory grows stronger...' : 'The patterns slip away...'
                         });
+                        if (memoryGifAttachment) {
+                            resultEmbed.setImage('attachment://Memory.gif');
+                        }
                         await interaction.editReply({
                             embeds: [resultEmbed],
-                            files: [memoryGifAttachment],
+                            ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
                             components: []
                         });
                     }
                     else {
                         game.processingMatch = false;
-                        const memoryGifAttachment = new discord_js_1.AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
+                        const memoryGifAttachment = await getMemoryAttachment();
                         await interaction.editReply({
                             embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
-                            files: [memoryGifAttachment],
+                            ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
                             components: createGameButtons(game, user)
                         });
                     }
@@ -257,7 +273,7 @@ exports.default = new handler_1.SlashCommand({
         });
         collector.on('end', async (collected, reason) => {
             if (reason === 'time') {
-                const memoryGifAttachment = new discord_js_1.AttachmentBuilder(memoryGifPath, { name: 'Memory.gif' });
+                const memoryGifAttachment = await getMemoryAttachment();
                 const timeoutEmbed = new discord_js_1.EmbedBuilder()
                     .setColor(GAME_CONSTANTS_1.PRISON_COLORS.warning)
                     .setTitle('⏰ Time\'s Up!')
@@ -266,10 +282,13 @@ exports.default = new handler_1.SlashCommand({
                     : 'The symbols fade into the void...\nPerhaps speed is as important as memory.')
                     .setImage('attachment://Memory.gif')
                     .setFooter({ text: 'Try another round with /matching' });
+                if (memoryGifAttachment) {
+                    embed.setImage('attachment://Memory.gif');
+                }
                 try {
                     await interaction.editReply({
                         embeds: [timeoutEmbed],
-                        files: [memoryGifAttachment],
+                        ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
                         components: []
                     });
                 }

@@ -6,6 +6,19 @@ const user_status_1 = require("../../../model/user_status");
 const user_services_1 = require("../../../services/user_services");
 const GAME_CONSTANTS_1 = require("../../../constants/GAME_CONSTANTS");
 const path_1 = require("path");
+const fs_1 = require("fs");
+async function getUnoAttachment() {
+    const unoGifPath = (0, path_1.join)(__dirname, '..', '..', '..', '..', 'gif', 'UNO.gif');
+    try {
+        await fs_1.promises.access(unoGifPath);
+        return new discord_js_1.AttachmentBuilder(unoGifPath, { name: 'UNO.gif' });
+    }
+    catch (error) {
+        console.error('UNO GIF not found:', error);
+        console.error('Attempted path:', unoGifPath);
+        return null;
+    }
+}
 const colours = ['Red', 'Green', 'Yellow', 'Blue'];
 const values = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
@@ -114,8 +127,7 @@ exports.default = new handler_1.SlashCommand({
             await interaction.editReply({ embeds: [embed] });
             return;
         }
-        const unoGifPath = (0, path_1.join)(__dirname, 'Gifs/UNO.gif');
-        const unoGifAttachment = new discord_js_1.AttachmentBuilder(unoGifPath, { name: 'UNO.gif' });
+        const unoGifAttachment = await getUnoAttachment();
         let deck = shuffleDeck(buildDeck());
         const playerHand = deck.splice(0, 4);
         const botHand = deck.splice(0, 4);
@@ -140,9 +152,11 @@ exports.default = new handler_1.SlashCommand({
                 `Your Hand: ${playerHand.map(c => `\`${user.sanity < 50 ? applyCardDistortion(c, user.sanity) : c}\``).join(', ')}\n` +
                 `Bot Hand: ${'🂠'.repeat(botHand.length)}\n\n` +
                 (message ? `${message}\n` : ''))
-                .setImage('attachment://UNO.gif')
                 .addFields({ name: 'Turn', value: isPlayerTurn ? 'Your Move' : 'Bot Thinking...', inline: true }, { name: '🧠 Sanity', value: `${(0, GAME_CONSTANTS_1.createProgressBar)(user.sanity, 100)} ${user.sanity}%`, inline: true })
                 .setFooter({ text: user.sanity < 50 ? 'T̷h̸e̵ ̷c̶a̵r̷d̴s̷ ̶h̵a̷v̶e̷ ̵e̷y̶e̵s̷.̵.̸.' : 'Play wisely...' });
+            if (unoGifAttachment) {
+                embed.setImage('attachment://UNO.gif');
+            }
             return embed;
         };
         const playTurn = async () => {
@@ -171,7 +185,7 @@ exports.default = new handler_1.SlashCommand({
                 await interaction.editReply({
                     embeds: [winEmbed],
                     components: [],
-                    files: [unoGifAttachment]
+                    ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
                 });
                 return;
             }
@@ -197,7 +211,7 @@ exports.default = new handler_1.SlashCommand({
                 await interaction.editReply({
                     embeds: [loseEmbed],
                     components: [],
-                    files: [unoGifAttachment]
+                    ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
                 });
                 return;
             }
@@ -223,7 +237,6 @@ exports.default = new handler_1.SlashCommand({
                 const response = await interaction.editReply({
                     embeds: [createGameEmbed()],
                     components: [row],
-                    files: [unoGifAttachment]
                 });
                 const collector = interaction.channel?.createMessageComponentCollector({
                     componentType: discord_js_1.ComponentType.Button,
@@ -247,7 +260,6 @@ exports.default = new handler_1.SlashCommand({
                                     ? corruptText(`🃏 You drew a card... something feels wrong...`)
                                     : `🃏 You drew \`${newCard}\`.`)],
                             components: [],
-                            files: [unoGifAttachment]
                         });
                         isPlayerTurn = false;
                         return setTimeout(playTurn, 2000);
@@ -262,7 +274,6 @@ exports.default = new handler_1.SlashCommand({
                                     ? corruptText(`T̸h̵e̵ ̶c̸a̵r̶d̸ ̴r̸e̶j̸e̸c̴t̸s̸ ̷y̵o̵u̸.̶.̴.`)
                                     : `❌ \`${chosen}\` can't be played on \`${topCard}\`.`)],
                             components: [],
-                            files: [unoGifAttachment]
                         });
                         return setTimeout(playTurn, 2000);
                     }
@@ -280,7 +291,6 @@ exports.default = new handler_1.SlashCommand({
                         await btnInteraction.update({
                             embeds: [createGameEmbed('🎨 Choose a color:')],
                             components: [colorSelect],
-                            files: [unoGifAttachment]
                         });
                         const colorCollector = interaction.channel?.createMessageComponentCollector({
                             componentType: discord_js_1.ComponentType.StringSelect,
@@ -299,7 +309,6 @@ exports.default = new handler_1.SlashCommand({
                             await selectInt.update({
                                 embeds: [createGameEmbed(`You chose **${currentColor}**. You played \`${chosen}\`.`)],
                                 components: [],
-                                files: [unoGifAttachment]
                             });
                             isPlayerTurn = false;
                             setTimeout(playTurn, 2000);
@@ -315,7 +324,6 @@ exports.default = new handler_1.SlashCommand({
                         await btnInteraction.update({
                             embeds: [createGameEmbed(`You played \`${chosen}\`. Bot's turn skipped!`)],
                             components: [],
-                            files: [unoGifAttachment]
                         });
                         return setTimeout(() => {
                             isPlayerTurn = true;
@@ -325,7 +333,6 @@ exports.default = new handler_1.SlashCommand({
                     await btnInteraction.update({
                         embeds: [createGameEmbed(`✅ You played \`${chosen}\`.`)],
                         components: [],
-                        files: [unoGifAttachment]
                     });
                     isPlayerTurn = false;
                     setTimeout(playTurn, 2000);
@@ -355,7 +362,7 @@ exports.default = new handler_1.SlashCommand({
                                     ? corruptText(timeoutMessage)
                                     : timeoutMessage)],
                             components: [],
-                            files: [unoGifAttachment]
+                            ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
                         });
                         isPlayerTurn = false;
                         setTimeout(playTurn, 2000);
@@ -390,7 +397,7 @@ exports.default = new handler_1.SlashCommand({
                                         ? corruptText(timeoutMessage)
                                         : timeoutMessage)],
                                 components: [],
-                                files: [unoGifAttachment]
+                                ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
                             });
                             isPlayerTurn = false;
                             setTimeout(playTurn, 2000);
@@ -470,7 +477,7 @@ exports.default = new handler_1.SlashCommand({
                 await interaction.editReply({
                     embeds: [createGameEmbed(botPlayMessage)],
                     components: [],
-                    files: [unoGifAttachment]
+                    ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
                 });
                 setTimeout(playTurn, 2000);
             }
@@ -484,11 +491,11 @@ exports.default = new handler_1.SlashCommand({
                     `Your Hand: ${playerHand.length} cards\n` +
                     `Bot Hand: ${botHand.length} cards\n\n` +
                     `Dealing cards${user.sanity < 30 ? '̶.̵.̸.̵' : '...'}`)
-                    .setImage('attachment://UNO.gif')
                     .setFooter({ text: 'Game starting...' })
+                    .setImage('attachment://UNO.gif')
             ],
             components: [],
-            files: [unoGifAttachment]
+            ...(unoGifAttachment ? { files: [unoGifAttachment] } : {})
         });
         setTimeout(playTurn, 1000);
     },

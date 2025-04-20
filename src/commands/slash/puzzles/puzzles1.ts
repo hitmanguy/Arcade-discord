@@ -452,7 +452,7 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
               totalGamesWon: user.totalGamesWon + 1 ,
               currentStreak: user.currentStreak + 1
           }),
-              UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', true)
+              UserService.updatePuzzleProgress(interaction.user.id, 'puzzle1', true)
   ]);
 
 

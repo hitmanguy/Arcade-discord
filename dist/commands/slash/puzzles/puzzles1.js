@@ -6,6 +6,19 @@ const path_1 = require("path");
 const user_status_1 = require("../../../model/user_status");
 const GAME_CONSTANTS_1 = require("../../../constants/GAME_CONSTANTS");
 const user_services_1 = require("../../../services/user_services");
+const fs_1 = require("fs");
+async function getPuzzleAttachment() {
+    const puzzleGifPath = (0, path_1.join)(__dirname, '..', '..', '..', '..', 'gif', 'puzzle.gif');
+    try {
+        await fs_1.promises.access(puzzleGifPath);
+        return new discord_js_1.AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+    }
+    catch (error) {
+        console.error('Puzzle GIF not found:', error);
+        console.error('Attempted path:', puzzleGifPath);
+        return null;
+    }
+}
 function createTimeoutEmbed(sanityLoss, suspicionGain) {
     return new discord_js_1.EmbedBuilder()
         .setColor(GAME_CONSTANTS_1.PRISON_COLORS.danger)
@@ -212,20 +225,21 @@ async function sendPuzzle(interaction, userId) {
         .setCustomId(`puzzle:answer:${opt}:${Date.now()}:${index}`)
         .setLabel(opt)
         .setStyle(discord_js_1.ButtonStyle.Primary)));
-    const puzzleGifPath = (0, path_1.join)(__dirname, 'Gifs/puzzle.gif');
-    const puzzleGifAttachment = new discord_js_1.AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+    const puzzleGifAttachment = await getPuzzleAttachment();
     const puzzleEmbed = new discord_js_1.EmbedBuilder()
         .setColor('#0099ff')
         .setTitle(`🧠 ${current.type.toUpperCase()} PUZZLE`)
         .setDescription(current.question)
-        .setImage('attachment://puzzle.gif')
         .setFooter({ text: `Puzzle ${session.index + 1}/5` });
+    if (puzzleGifAttachment) {
+        puzzleEmbed.setImage('attachment://puzzle.gif');
+    }
     if (current.flavor) {
         puzzleEmbed.addFields({ name: '\u200B', value: current.flavor });
     }
     const message = await interaction.editReply({
         embeds: [puzzleEmbed],
-        files: [puzzleGifAttachment],
+        ...(puzzleGifAttachment ? { files: [puzzleGifAttachment] } : {}),
         components: [row],
     });
     const collector = message.createMessageComponentCollector({
@@ -345,15 +359,16 @@ async function showFinalOptions(interaction, userId) {
     const user = await user_status_1.User.findOne({ discordId: interaction.user.id });
     if (!user)
         return;
-    const puzzleGifPath = (0, path_1.join)(__dirname, '../../../Gifs/puzzle.gif');
-    const puzzleGifAttachment = new discord_js_1.AttachmentBuilder(puzzleGifPath, { name: 'puzzle.gif' });
+    const puzzleGifAttachment = await getPuzzleAttachment();
     const embed = new discord_js_1.EmbedBuilder()
         .setTitle('🧩 Puzzle Report')
         .setDescription(`You've completed Level 1 puzzles!`)
-        .setImage('attachment://puzzle.gif')
         .addFields({ name: '💰 Merit Points', value: session.merit.toString(), inline: true }, { name: '🧠 Sanity', value: session.sanity.toString(), inline: true }, { name: '👁️ Suspicion', value: session.suspicion.toString(), inline: true })
         .setColor('Blue')
         .setFooter({ text: 'Return tomorrow for more puzzles!' });
+    if (puzzleGifAttachment) {
+        embed.setImage('attachment://puzzle.gif');
+    }
     const buttonRow = new discord_js_1.ActionRowBuilder().addComponents(new discord_js_1.ButtonBuilder()
         .setCustomId('puzzle:progress')
         .setLabel('📊 View Progress')
@@ -374,7 +389,7 @@ async function showFinalOptions(interaction, userId) {
     ]);
     const message = await interaction.editReply({
         embeds: [embed],
-        files: [puzzleGifAttachment],
+        ...(puzzleGifAttachment ? { files: [puzzleGifAttachment] } : {}),
         components: [buttonRow]
     });
     const collector = message.createMessageComponentCollector({

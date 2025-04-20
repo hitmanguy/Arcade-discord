@@ -2,9 +2,22 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const handler_1 = require("../../../handler");
 const discord_js_1 = require("discord.js");
+const fs_1 = require("fs");
 const Device_schema_1 = require("../../../model/Device_schema");
 const node_characterai_1 = require("node_characterai");
 const path_1 = require("path");
+async function getDeviceAttachment() {
+    const deviceGifPath = (0, path_1.join)(__dirname, '..', '..', '..', '..', 'gif', 'device.gif');
+    try {
+        await fs_1.promises.access(deviceGifPath);
+        return new discord_js_1.AttachmentBuilder(deviceGifPath, { name: 'device.gif' });
+    }
+    catch (error) {
+        console.error('Device GIF not found:', error);
+        console.error('Attempted path:', deviceGifPath);
+        return null;
+    }
+}
 const CONTACTS = [
     { id: 'inmate', name: 'Unknown Inmate', emoji: '🧑‍🦲', character_id: '6mjczLKtizpMFcnKUmo4Vf0_LvS3lLl6xmuThQy9SQc' },
 ];
@@ -30,8 +43,7 @@ exports.default = new handler_1.SlashCommand({
             });
             return;
         }
-        const deviceGifPath = (0, path_1.join)(__dirname, 'Gifs/device.gif');
-        const deviceGifAttachment = new discord_js_1.AttachmentBuilder(deviceGifPath, { name: 'Device.gif' });
+        const deviceGifAttachment = await getDeviceAttachment();
         const selectMenu = new discord_js_1.StringSelectMenuBuilder()
             .setCustomId('device:select_contact')
             .setPlaceholder('Select a contact to message...')
@@ -44,13 +56,15 @@ exports.default = new handler_1.SlashCommand({
         const embed = new discord_js_1.EmbedBuilder()
             .setColor('#6f42c1')
             .setTitle('📱 Prison Device Interface')
-            .setImage('attachment://Device.gif')
             .setDescription('Who do you want to contact?')
             .setFooter({ text: 'Select a contact to start chatting.' });
+        if (deviceGifAttachment) {
+            embed.setImage('attachment://device.gif');
+        }
         await interaction.reply({
             embeds: [embed],
             components: [selectRow],
-            files: [deviceGifAttachment],
+            ...(deviceGifAttachment ? { files: [deviceGifAttachment] } : {}),
             flags: [discord_js_1.MessageFlags.Ephemeral]
         });
         const selectInteraction = await interaction.channel?.awaitMessageComponent({
