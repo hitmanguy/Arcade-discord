@@ -78,7 +78,7 @@ You’re racing against time. Crack numeric codes, predict patterns, and solve c
 
 - 🧠 **Focus:** Number logic, calculations, and sequences  
 - ⏱️ **Challenge:** Timed pressure with rising difficulty  
-- 🎯 **Goal:** Reach a total of 250 merit points to successfully breach the prison and be set free
+- 🎯 **Goal:** Complete this level to successfully breach the prison and be set free
 
 
 ---
