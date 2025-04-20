@@ -18,7 +18,7 @@ This Discord bot is a multiplayer puzzle game set in a prison escape theme, blen
 
 ## 🧩 Game Descriptions
 
-### 1. **Basic Training**
+### 1. **Puzzle Solving(Level 1)**
 - Introduction level.
 - Simple riddles, trivia, and math puzzles.
 - Earn points to unlock the next levels.
@@ -28,21 +28,17 @@ This Discord bot is a multiplayer puzzle game set in a prison escape theme, blen
 - Dark and claustrophobic setting.
 - Includes logic puzzles and high-stakes timed challenges.
 
-### 3. **🎴 Memory Test**
+### 3. **🎴 Memory Test (Level 3)**
 - Match pairs of hidden cards.
 - Tests memory and pattern recognition under pressure.
 
-### 4. **🃏 Digital Card Protocol (UNO Style)**
+### 4. **🃏 Digital Card Protocol - UNO (Level 4)**
 - Card game simulation with puzzle mechanics.
 - Strategic use of skips, reverses, and wild cards.
 
-### 5. **🔢 The Numbers Protocol**
+### 5. **🔢 The Numbers Protocol (Level 5)**
 - Solve number-based puzzles and patterns.
 - Precision and calculation-focused.
-
-### 6. **👥 The Judas Protocol**
-- Sabotage-based logic deduction game.
-- Includes betrayal mechanics and high risk/reward.
 
 ---
 
