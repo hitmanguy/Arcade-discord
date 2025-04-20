@@ -10,11 +10,13 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   EmbedBuilder,
-  ColorResolvable
+  ColorResolvable,
+  AttachmentBuilder
 } from 'discord.js';
 import { User } from '../../../model/user_status';
 import { UserService } from '../../../services/user_services';
 import { PRISON_COLORS, PUZZLE_REWARDS, SANITY_EFFECTS, STORYLINE, createProgressBar } from '../../../constants/GAME_CONSTANTS';
+import { join } from 'path';
 
 const colours = ['Red', 'Green', 'Yellow', 'Blue'];
 const values = [
@@ -117,34 +119,34 @@ export default new SlashCommand({
       return;
     }
 
-          const requiredPuzzles = ['puzzles1', 'tunnel1', 'matchingpairs'];
-        const completedPuzzles = user.puzzleProgress.filter(p => requiredPuzzles.includes(p.puzzleId) && p.completed);
+    const requiredPuzzles = ['puzzles1', 'tunnel1', 'matchingpairs'];
+    const completedPuzzles = user.puzzleProgress.filter(p => requiredPuzzles.includes(p.puzzleId) && p.completed);
         
-        // Add type guard for storyline entries
-        function isStorylineEntry(value: any): value is { name: string; description: string; flavorText: string } {
-            return value && typeof value === 'object' && 'name' in value;
-        }
+    // Add type guard for storyline entries
+    function isStorylineEntry(value: any): value is { name: string; description: string; flavorText: string } {
+        return value && typeof value === 'object' && 'name' in value;
+    }
 
-        // Update the progress display with proper type checking
-        if (completedPuzzles.length < requiredPuzzles.length) {
-            await interaction.reply({ 
-                embeds: [new EmbedBuilder()
-                    .setColor(getColorFromPrisonColor('danger'))
-                    .setTitle('⚠️ Access Denied')
-                    .setDescription('The Judas Protocol requires mastery of simpler trials first.')
-                    .addFields({
-                        name: 'Required Trials',
-                        value: requiredPuzzles.map(id => {
-                            const completed = user.puzzleProgress.find(p => p.puzzleId === id)?.completed;
-                            const storylineEntry = STORYLINE[id as keyof typeof STORYLINE];
-                            const name = isStorylineEntry(storylineEntry) ? storylineEntry.name : id;
-                            return `${completed ? '✅' : '❌'} ${name}`;
-                        }).join('\n')
-                    })],
-                ephemeral: true
-            });
-            return;
-        }
+    // Update the progress display with proper type checking
+    if (completedPuzzles.length < requiredPuzzles.length) {
+        await interaction.reply({ 
+            embeds: [new EmbedBuilder()
+                .setColor(getColorFromPrisonColor('danger'))
+                .setTitle('⚠️ Access Denied')
+                .setDescription('The Judas Protocol requires mastery of simpler trials first.')
+                .addFields({
+                    name: 'Required Trials',
+                    value: requiredPuzzles.map(id => {
+                        const completed = user.puzzleProgress.find(p => p.puzzleId === id)?.completed;
+                        const storylineEntry = STORYLINE[id as keyof typeof STORYLINE];
+                        const name = isStorylineEntry(storylineEntry) ? storylineEntry.name : id;
+                        return `${completed ? '✅' : '❌'} ${name}`;
+                    }).join('\n')
+                })],
+            ephemeral: true
+        });
+        return;
+    }
 
     // Check for isolation or high suspicion
     if (user.isInIsolation || user.suspiciousLevel >= 80) {
@@ -159,6 +161,10 @@ export default new SlashCommand({
       await interaction.editReply({ embeds: [embed] });
       return;
     }
+
+    // Create the attachment for the UNO GIF from local file
+    const unoGifPath = join(__dirname, '../../../Gifs/UNO.gif');
+    const unoGifAttachment = new AttachmentBuilder(unoGifPath, { name: 'UNO.gif' });
 
     let deck = shuffleDeck(buildDeck());
     const playerHand = deck.splice(0, 4);
@@ -188,6 +194,7 @@ export default new SlashCommand({
           `Bot Hand: ${'🂠'.repeat(botHand.length)}\n\n` +
           (message ? `${message}\n` : '')
         )
+        .setImage('attachment://UNO.gif') // Add the GIF reference here
         .addFields(
           { name: 'Turn', value: isPlayerTurn ? 'Your Move' : 'Bot Thinking...', inline: true },
           { name: '🧠 Sanity', value: `${createProgressBar(user.sanity, 100)} ${user.sanity}%`, inline: true }
@@ -223,9 +230,14 @@ export default new SlashCommand({
             `• Sanity: +${UNO_REWARDS.success.sanity}\n` +
             `• Win Streak: ${user.currentStreak + 1}`
           )
+          .setImage('attachment://UNO.gif') // Keep the GIF in the result screen
           .setFooter({ text: 'Your strategic mind serves you well here...' });
 
-        await interaction.editReply({ embeds: [winEmbed], components: [] });
+        await interaction.editReply({ 
+          embeds: [winEmbed], 
+          components: [],
+          files: [unoGifAttachment] // Include the GIF file
+        });
         return;
       }
       
@@ -251,9 +263,14 @@ export default new SlashCommand({
             `• Sanity: ${UNO_REWARDS.failure.sanity}\n` +
             `• Win Streak: Reset to 0`
           )
+          .setImage('attachment://UNO.gif') // Keep the GIF in the result screen
           .setFooter({ text: user.sanity < 40 ? 'T̵h̸e̵ ̷g̶a̵m̷e̴ ̷p̶l̵a̷y̶s̷ ̵y̷o̶u̵.̷.̸.' : 'Better luck next time...' });
 
-        await interaction.editReply({ embeds: [loseEmbed], components: [] });
+        await interaction.editReply({ 
+          embeds: [loseEmbed], 
+          components: [],
+          files: [unoGifAttachment] // Include the GIF file
+        });
         return;
       }
 
@@ -290,7 +307,8 @@ export default new SlashCommand({
 
         const response = await interaction.editReply({
           embeds: [createGameEmbed()],
-          components: [row]
+          components: [row],
+          files: [unoGifAttachment] // Include the GIF file
         });
 
         const collector = interaction.channel?.createMessageComponentCollector({
@@ -314,7 +332,8 @@ export default new SlashCommand({
               embeds: [createGameEmbed(user.sanity < 40 
                 ? corruptText(`🃏 You drew a card... something feels wrong...`) 
                 : `🃏 You drew \`${newCard}\`.`)],
-              components: []
+              components: [],
+              files: [unoGifAttachment] // Include the GIF file
             });
             isPlayerTurn = false;
             return setTimeout(playTurn, 2000);
@@ -331,7 +350,8 @@ export default new SlashCommand({
               embeds: [createGameEmbed(user.sanity < 40 
                 ? corruptText(`T̸h̵e̵ ̶c̸a̵r̶d̸ ̴r̸e̶j̸e̸c̴t̸s̸ ̷y̵o̵u̸.̶.̴.`) 
                 : `❌ \`${chosen}\` can't be played on \`${topCard}\`.`)],
-              components: []
+              components: [],
+              files: [unoGifAttachment] // Include the GIF file
             });
             return setTimeout(playTurn, 2000);
           }
@@ -355,7 +375,8 @@ export default new SlashCommand({
 
             await btnInteraction.update({
               embeds: [createGameEmbed('🎨 Choose a color:')],
-              components: [colorSelect]
+              components: [colorSelect],
+              files: [unoGifAttachment] // Include the GIF file
             });
             
             const colorCollector = interaction.channel?.createMessageComponentCollector({
@@ -376,7 +397,8 @@ export default new SlashCommand({
               
               await selectInt.update({
                 embeds: [createGameEmbed(`You chose **${currentColor}**. You played \`${chosen}\`.`)],
-                components: []
+                components: [],
+                files: [unoGifAttachment] // Include the GIF file
               });
               
               isPlayerTurn = false;
@@ -396,7 +418,8 @@ export default new SlashCommand({
           if (chosen.includes('Skip') || chosen.includes('Reverse')) {
             await btnInteraction.update({
               embeds: [createGameEmbed(`You played \`${chosen}\`. Bot's turn skipped!`)],
-              components: []
+              components: [],
+              files: [unoGifAttachment] // Include the GIF file
             });
             return setTimeout(() => {
               isPlayerTurn = true;
@@ -406,7 +429,8 @@ export default new SlashCommand({
 
           await btnInteraction.update({
             embeds: [createGameEmbed(`✅ You played \`${chosen}\`.`)],
-            components: []
+            components: [],
+            files: [unoGifAttachment] // Include the GIF file
           });
           
           isPlayerTurn = false;
@@ -440,7 +464,8 @@ export default new SlashCommand({
               embeds: [createGameEmbed(user.sanity < 40 
                 ? corruptText(timeoutMessage) 
                 : timeoutMessage)],
-              components: []
+              components: [],
+              files: [unoGifAttachment] // Include the GIF file
             });
 
             isPlayerTurn = false;
@@ -529,6 +554,7 @@ export default new SlashCommand({
         await interaction.editReply({
           embeds: [createGameEmbed(botPlayMessage)],
           components: [],
+          files: [unoGifAttachment] // Include the GIF file
         });
 
         setTimeout(playTurn, 2000);
@@ -546,9 +572,11 @@ export default new SlashCommand({
             `Bot Hand: ${botHand.length} cards\n\n` +
             `Dealing cards${user.sanity < 30 ? '̶.̵.̸.̵' : '...'}`
           )
+          .setImage('attachment://UNO.gif') // Include the GIF in the initial screen
           .setFooter({ text: 'Game starting...' })
       ],
       components: [],
+      files: [unoGifAttachment] // Include the GIF file
     });
 
     setTimeout(playTurn, 1000);
@@ -558,4 +586,3 @@ export default new SlashCommand({
 function getColorFromPrisonColor(colorKey: keyof typeof PRISON_COLORS): ColorResolvable {
   return PRISON_COLORS[colorKey] as ColorResolvable;
 }
-
