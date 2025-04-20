@@ -56,7 +56,7 @@ export interface KingsOfDiamondsPlayer {
         hasSelected: false,
         selectedNumber: null,
         isEliminated: false,
-        extraLives: 1
+        extraLives: 10 // Initialize with 10 lives
       });
   
       return true;

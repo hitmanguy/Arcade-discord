@@ -15,11 +15,13 @@ import {
     ComponentType,
     ChatInputCommandInteraction,
     StringSelectMenuBuilder,
-    StringSelectMenuInteraction
+    StringSelectMenuInteraction,
+    MessageFlags
   } from 'discord.js';
 import { KingsOfDiamondsGame } from '../../../functions/beauty_context_game';
 import { glitchText } from '../../../constants/text_util';
 import { User } from '../../../model/user_status';
+import { STORYLINE } from 'src/constants/GAME_CONSTANTS';
   
   // Store active games
   const activeGames = new Map<string, KingsOfDiamondsGame>();
@@ -53,6 +55,36 @@ import { User } from '../../../model/user_status';
                     });
                     return;
                 }
+
+        const requiredPuzzles = ['puzzles1', 'tunnel1', 'matchingpairs', 'UNO'];
+        const completedPuzzles = user.puzzleProgress.filter(p => requiredPuzzles.includes(p.puzzleId) && p.completed);
+        
+        // Add type guard for storyline entries
+        function isStorylineEntry(value: any): value is { name: string; description: string; flavorText: string } {
+            return value && typeof value === 'object' && 'name' in value;
+        }
+
+        // Update the progress display with proper type checking
+        if (completedPuzzles.length < requiredPuzzles.length) {
+            await interaction.reply({ 
+                embeds: [new EmbedBuilder()
+                    .setColor(getColorFromPrisonColor('danger'))
+                    .setTitle('⚠️ Access Denied')
+                    .setDescription('The Judas Protocol requires mastery of simpler trials first.')
+                    .addFields({
+                        name: 'Required Trials',
+                        value: requiredPuzzles.map(id => {
+                            const completed = user.puzzleProgress.find(p => p.puzzleId === id)?.completed;
+                            const storylineEntry = STORYLINE[id as keyof typeof STORYLINE];
+                            const name = isStorylineEntry(storylineEntry) ? storylineEntry.name : id;
+                            return `${completed ? '✅' : '❌'} ${name}`;
+                        }).join('\n')
+                    })],
+                ephemeral: true
+            });
+            return;
+        }
+
         const subcommand = interaction.options.getSubcommand();
       
         switch (subcommand) {
@@ -76,7 +108,7 @@ import { User } from '../../../model/user_status';
     if (activeGames.has(channelId)) {
       await interaction.reply({
         content: 'There is already an active King of Diamonds game in this channel! Use `/king-of-diamonds join` to join it.',
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -96,7 +128,7 @@ import { User } from '../../../model/user_status';
     if (!success) {
       await interaction.reply({
         content: 'Failed to create the game. Please try again.',
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       activeGames.delete(channelId);
       return;
@@ -192,7 +224,7 @@ import { User } from '../../../model/user_status';
     if (game.hasPlayer(interaction.user.id)) {
       await interaction.reply({
         content: 'You have already joined this game!',
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -207,7 +239,7 @@ import { User } from '../../../model/user_status';
     if (!success) {
       await interaction.reply({
         content: 'Failed to join the game. The game might be full.',
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -232,7 +264,7 @@ import { User } from '../../../model/user_status';
     if (!game) {
       await interaction.reply({
         content: 'There is no active King of Diamonds game in this channel! Use `/king-of-diamonds start` to start one.',
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -240,7 +272,7 @@ import { User } from '../../../model/user_status';
     if (game.hasPlayer(interaction.user.id)) {
       await interaction.reply({
         content: 'You have already joined this game!',
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -255,14 +287,14 @@ import { User } from '../../../model/user_status';
     if (!success) {
       await interaction.reply({
         content: 'Failed to join the game. The game might be full or already started.',
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
   
     await interaction.reply({
       content: `You've joined the King of Diamonds game! Wait for the host to start the game.`,
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   
     // Update the game embed if possible
@@ -287,7 +319,7 @@ import { User } from '../../../model/user_status';
   
     await interaction.reply({
       embeds: [embed],
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   }
   
@@ -360,7 +392,7 @@ import { User } from '../../../model/user_status';
             if (!player) {
                 await i.reply({
                     content: 'You are not part of this game!',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
                 return;
             }
@@ -368,7 +400,7 @@ import { User } from '../../../model/user_status';
             if (player.hasSelected) {
                 await i.reply({
                     content: 'You have already made your selection for this round!',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
                 return;
             }
@@ -390,7 +422,7 @@ import { User } from '../../../model/user_status';
         if (isNaN(number) || number < 0 || number > 100) {
             await modal.reply({
                 content: 'Please enter a valid number between 0 and 100!',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
             return;
         }
@@ -403,7 +435,7 @@ import { User } from '../../../model/user_status';
             const glitched = glitchText('Your hands are shaking... you can barely focus...');
             await modal.reply({
                 content: glitched,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
 
             const actualNumber = Math.random() < 0.7 ? number : Math.floor(Math.random() * 101);
@@ -412,14 +444,14 @@ import { User } from '../../../model/user_status';
             setTimeout(async () => {
                 await modal.followUp({
                     content: glitchText(`You selected: ${actualNumber}`),
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }, 1500);
         } else {
             game.selectNumber(modal.user.id, number);
             await modal.reply({
                 content: `You selected: ${number}`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
 
@@ -614,7 +646,7 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     if (players.length === 0) {
       await interaction.reply({
         content: 'No players available to target!',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -674,7 +706,7 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     if (availablePlayers.length === 0) {
       await interaction.reply({
         content: 'No available players to team up with!',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -696,7 +728,7 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     await interaction.reply({
       content: 'Select a player to team up with:',
       components: [row],
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
 
     const collector = interaction.channel?.createMessageComponentCollector({
@@ -738,7 +770,7 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
         if (isNaN(number) || number < 0 || number > 100) {
           await modalInteraction.reply({
             content: 'Please enter a valid number between 0 and 100!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -748,12 +780,12 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
           const teammate = game.getPlayer(targetId);
           await modalInteraction.reply({
             content: `Successfully formed a team with ${teammate?.name}! Your team number is ${number}.`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
         } else {
           await modalInteraction.reply({
             content: 'Failed to form team. The player might already be in a team.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
         }
       } catch (error) {
@@ -773,7 +805,7 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     if (!game) {
       await interaction.reply({
         content: 'This game has ended or does not exist anymore.',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -781,3 +813,7 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     // Handle button interactions specific to this command
     // This is called from the main button handler in index.ts
   }
+
+function getColorFromPrisonColor(arg0: string): import("discord.js").ColorResolvable | null {
+  throw new Error('Function not implemented.');
+}

@@ -86,6 +86,35 @@ export default new SlashCommand({
             return;
         }
 
+        const requiredPuzzles = ['puzzles1'];
+        const completedPuzzles = user.puzzleProgress.filter(p => requiredPuzzles.includes(p.puzzleId) && p.completed);
+        
+        // Add type guard for storyline entries
+        function isStorylineEntry(value: any): value is { name: string; description: string; flavorText: string } {
+            return value && typeof value === 'object' && 'name' in value;
+        }
+
+        // Update the progress display with proper type checking
+        if (completedPuzzles.length < requiredPuzzles.length) {
+            await interaction.reply({ 
+                embeds: [new EmbedBuilder()
+                    .setColor(getColorFromPrisonColor('danger'))
+                    .setTitle('⚠️ Access Denied')
+                    .setDescription('The Judas Protocol requires mastery of simpler trials first.')
+                    .addFields({
+                        name: 'Required Trials',
+                        value: requiredPuzzles.map(id => {
+                            const completed = user.puzzleProgress.find(p => p.puzzleId === id)?.completed;
+                            const storylineEntry = STORYLINE[id as keyof typeof STORYLINE];
+                            const name = isStorylineEntry(storylineEntry) ? storylineEntry.name : id;
+                            return `${completed ? '✅' : '❌'} ${name}`;
+                        }).join('\n')
+                    })],
+                ephemeral: true
+            });
+            return;
+        }
+
         // Check for isolation or high suspicion
         if (user.isInIsolation || user.suspiciousLevel >= 80) {
             const embed = new EmbedBuilder()
@@ -269,7 +298,7 @@ export default new SlashCommand({
         interaction.awaitModalSubmit({ filter: modalFilter, time: 120000 })
     .then(async submission => {
         // Properly defer the modal response
-        await submission.deferReply({ ephemeral: true });
+        await submission.deferReply({ flags: MessageFlags.Ephemeral });
 
         // Process answer
         const answer = submission.fields.getTextInputValue('sequence_answer')
@@ -447,3 +476,7 @@ function getRandomGlitchMessage(): string {
         Math.floor(Math.random() * SANITY_EFFECTS.glitchMessages.length)
     ];
 }
+function getColorFromPrisonColor(arg0: string): import("discord.js").ColorResolvable | null {
+    throw new Error('Function not implemented.');
+}
+
