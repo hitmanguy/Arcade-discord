@@ -155,7 +155,7 @@ CHARACTER_TOKEN = "character.ai token for chatbot"
 ---
 ## 📽️ Demo Run Video
 
-[![Demo Run Video](https://img.youtube.com/vi/zaJnjWUc0DI/0.jpg)](https://www.youtube.com/watch?v=zaJnjWUc0DI)
+[![Demo Run Video](https://img.youtube.com/vi/9U7K6cM87y4/0.jpg)](https://www.youtube.com/watch?v=9U7K6cM87y4)
 
 🎮 *Enjoy the demo run and get a glimpse of how you can solve this prison escape puzzle in the shortest time!* ⏱️
 
