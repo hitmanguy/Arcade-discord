@@ -123,10 +123,10 @@ Stay sharp and play smart!
 
 ```bash
 # 1. Clone the repository
-$ git clone https://github.com/your-repo/prison-escape-bot.git
+$ git clone https://github.com/hitmanguy/Arcade-discord.git
 
 # 2. Navigate to the project folder
-$ cd prison-escape-bot
+$ cd Arcade-discord
 
 # 3. Install dependencies
 $ npm install
