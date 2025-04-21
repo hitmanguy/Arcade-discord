@@ -29,7 +29,7 @@ Welcome to **Orientation Block A** — the first step on your path to freedom. H
 This level introduces you to the core mechanics: **merit, sanity, and suspicion**. It’s your trial by mind — clear it, and you earn your first ticket toward escape.
 
 - 🧩 **Content:** Riddles, trivia, and beginner-level logic puzzles  
-- 💡 **Goal:** Earn 50+ merit points  
+- 💡 **Goal:** Earn 100+ merit points  
 - 🔓 **Unlocks:** Level 2 – The Tunnel
 
 ---
@@ -42,7 +42,7 @@ Players must solve **memory-based matching puzzles** and **timed logic sequences
 
 - 🧠 **Focus:** Memory recall, matching pairs, fast pattern recognition  
 - ⏱️ **Pressure:** Shorter time limits and rising difficulty  
-- 🎯 **Goal:** Reach a total of 100 merit points to unlock Level 3
+- 🎯 **Goal:** Reach a total of 200 merit points to unlock Level 3
 
 ---
 
@@ -54,7 +54,7 @@ Each round gets faster. Each failure chips away at your **sanity** and raises yo
 
 - 🧠 **Focus:** Sequence recall, visual memory, and reaction speed  
 - 🔄 **Replayability:** Patterns change every session  
-- 🎯 **Goal:** Reach a total of 150 merit points to unlock the next stage
+- 🎯 **Goal:** Reach a total of 300 merit points to unlock the next stage
 
 ---
 
@@ -66,7 +66,7 @@ Outwit not just the game, but other players. Choose when to strike, when to defe
 
 - 🎴 **Focus:** Card logic, strategy, and timing  
 - 🔁 **Mechanics:** Wild cards, chain effects, surprise reveals  
-- 🎯 **Goal:** Achieve 200 total merit points to unlock the next protocol
+- 🎯 **Goal:** Achieve 400 total merit points to unlock the next protocol
 
 ---
 
