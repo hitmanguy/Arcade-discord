@@ -10,7 +10,7 @@ const defaultConfig = {
             prefix: "?"
         }
     ],
-    ownerId: 'YOUR_USER_ID',
+    ownerId: '846343544707874857',
     eventsFolder: 'events',
     commandsFolder: 'commands',
     componentsFolder: 'components',

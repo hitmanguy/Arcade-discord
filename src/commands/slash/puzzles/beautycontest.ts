@@ -1,4 +1,4 @@
-// src/commands/kingsOfDiamonds.ts
+// src/commands/slash/puzzles/kingsOfDiamonds.ts
 import { RegisterType, SlashCommand } from '../../../handler';
 import { 
     SlashCommandBuilder, 
@@ -17,12 +17,13 @@ import {
     StringSelectMenuBuilder,
     StringSelectMenuInteraction,
     MessageFlags,
-    ColorResolvable
-  } from 'discord.js';
+    ColorResolvable,
+    InteractionCollector
+} from 'discord.js';
 import { KingsOfDiamondsGame } from '../../../functions/beauty_context_game';
 import { glitchText } from '../../../constants/text_util';
 import { User } from '../../../model/user_status';
-import { PRISON_COLORS, STORYLINE } from '../../../constants/GAME_CONSTANTS';
+import { PRISON_COLORS, STORYLINE, SANITY_EFFECTS } from '../../../constants/GAME_CONSTANTS';
 import { UserService } from '../../../services/user_services';
 
 const GAME_REWARDS = {
@@ -42,7 +43,7 @@ const GAME_REWARDS = {
   const activeGames = new Map<string, KingsOfDiamondsGame>();
   
   export default new SlashCommand ({
-    registerType: RegisterType.Guild,
+    registerType: RegisterType.Global,
     data: new SlashCommandBuilder()
     .setName('king-of-diamonds')
     .setDescription('Play the King of Diamonds game from Alice in Borderland')
@@ -76,7 +77,7 @@ const GAME_REWARDS = {
           return;
         }
         const merit = user.meritPoints;
-        if(merit<100){
+        if(merit<400){
           await interaction.reply('You dont have enough merit points to play this. You can play the previous game to earn more points');
           return;
         }
@@ -101,7 +102,6 @@ const GAME_REWARDS = {
   async function handleGameStart(interaction: CommandInteraction) {
     const channelId = interaction.channelId;
   
-    // Check if there's already an active game in this channel
     if (activeGames.has(channelId)) {
       await interaction.reply({
         content: 'There is already an active King of Diamonds game in this channel! Use `/king-of-diamonds join` to join it.',
@@ -110,11 +110,9 @@ const GAME_REWARDS = {
       return;
     }
   
-    // Create a new game
     const game = new KingsOfDiamondsGame();
     activeGames.set(channelId, game);
   
-    // Add the creator as the first player
     const user = await User.findOne({ discordId: interaction.user.id });
     const success = game.addPlayer({
       id: interaction.user.id,
@@ -131,7 +129,6 @@ const GAME_REWARDS = {
       return;
     }
   
-    // Create the join button
     const row = new ActionRowBuilder<ButtonBuilder>()
       .addComponents(
         new ButtonBuilder()
@@ -170,7 +167,6 @@ const GAME_REWARDS = {
         });
       }
   
-    // Create a collector for the join button
     const collector = response.createMessageComponentCollector({
       componentType: ComponentType.Button,
       time: 300000 // 5 minutes
@@ -180,7 +176,6 @@ const GAME_REWARDS = {
       if (buttonInteraction.customId === 'kod_join') {
         await handleJoinButton(buttonInteraction, game, embed);
       } else if (buttonInteraction.customId === 'kod_start') {
-        // Only the creator can start the game
         if (buttonInteraction.user.id !== interaction.user.id) {
           await buttonInteraction.reply({
             content: 'Only the host can start the game!',
@@ -226,7 +221,6 @@ const GAME_REWARDS = {
   ) {
     const user = await User.findOne({ discordId: interaction.user.id });
     
-    // Check if player is already in the game
     if (game.hasPlayer(interaction.user.id)) {
       await interaction.reply({
         content: 'You have already joined this game!',
@@ -235,7 +229,6 @@ const GAME_REWARDS = {
       return;
     }
   
-    // Add player to the game
     const success = game.addPlayer({
       id: interaction.user.id,
       name: interaction.user.username,
@@ -249,8 +242,6 @@ const GAME_REWARDS = {
       });
       return;
     }
-  
-    // Update the embed with the new player list
     const players = game.getPlayers().map((player, i) => `${i + 1}. ${player.name}`).join('\n');
     embed.setFields(
       { name: 'Players', value: players, inline: true },
@@ -270,9 +261,10 @@ const GAME_REWARDS = {
   }
   
   async function handleGameJoin(interaction: CommandInteraction) {
+  try {
     const channelId = interaction.channelId;
     const game = activeGames.get(channelId);
-  
+
     if (!game) {
       await interaction.reply({
         content: 'There is no active King of Diamonds game in this channel! Use `/king-of-diamonds start` to start one.',
@@ -280,7 +272,7 @@ const GAME_REWARDS = {
       });
       return;
     }
-  
+
     if (game.hasPlayer(interaction.user.id)) {
       await interaction.reply({
         content: 'You have already joined this game!',
@@ -288,14 +280,22 @@ const GAME_REWARDS = {
       });
       return;
     }
-  
+
     const user = await User.findOne({ discordId: interaction.user.id });
+    if (!user) {
+      await interaction.reply({
+        content: 'You must be registered to join the game. Use `/register` first.',
+        flags: [MessageFlags.Ephemeral]
+      });
+      return;
+    }
+
     const success = game.addPlayer({
       id: interaction.user.id,
       name: interaction.user.username,
-      sanity: user?.sanity || 100
+      sanity: user.sanity
     });
-  
+
     if (!success) {
       await interaction.reply({
         content: 'Failed to join the game. The game might be full or already started.',
@@ -303,15 +303,19 @@ const GAME_REWARDS = {
       });
       return;
     }
-  
+
     await interaction.reply({
       content: `You've joined the King of Diamonds game! Wait for the host to start the game.`,
       flags: [MessageFlags.Ephemeral]
     });
-  
-    // Update the game embed if possible
-    // (This would require storing the original message, which is outside the scope of this example)
+  } catch (error) {
+    console.error('Error in handleGameJoin:', error);
+    await interaction.reply({
+      content: 'An error occurred while trying to join the game.',
+      flags: [MessageFlags.Ephemeral]
+    });
   }
+}
   
   async function handleShowRules(interaction: CommandInteraction) {
     const embed = new EmbedBuilder()
@@ -340,10 +344,8 @@ const GAME_REWARDS = {
     game: KingsOfDiamondsGame,
     channelId: string
   ) {
-    // Initialize the game
     game.startGame();
-    
-    // Show the game introduction
+
     const introEmbed = new EmbedBuilder()
       .setColor('#FF0000')
       .setTitle('King of Diamonds - Game Started')
@@ -357,7 +359,6 @@ const GAME_REWARDS = {
       embeds: [introEmbed]
     });
     
-    // Start the first round
     await startRound(interaction, game, channelId);
   }
   
@@ -366,9 +367,11 @@ const GAME_REWARDS = {
     game: KingsOfDiamondsGame,
     channelId: string
 ) {
-    await game.startRound();
+    let buttonCollector: InteractionCollector<any> | null = null;
     
-    const embed = new EmbedBuilder()
+    try {
+        await game.startRound();
+        const embed = new EmbedBuilder()
         .setColor('#FF0000')
         .setTitle(`King of Diamonds - Round ${game.getRound()}`)
         .setDescription('Make your selection!')
@@ -377,7 +380,6 @@ const GAME_REWARDS = {
             { name: 'Players', value: game.getActivePlayers().map(p => `${p.name} (${p.score})`).join('\n'), inline: true }
         );
 
-    // Create select number button
     const row = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
             new ButtonBuilder()
@@ -391,10 +393,17 @@ const GAME_REWARDS = {
         components: [row]
     });
 
-    // Button collector for showing the modal
-    const buttonCollector = response.createMessageComponentCollector({
+    buttonCollector = response.createMessageComponentCollector({
         componentType: ComponentType.Button,
         time: 30000
+    });
+
+    buttonCollector.on('error', async (error) => {
+        console.error('Collector error:', error);
+        await safeInteractionUpdate(interaction, {
+            content: 'An error occurred during the game round.',
+            components: []
+        });
     });
 
     buttonCollector.on('collect', async (i: ButtonInteraction) => {
@@ -421,10 +430,8 @@ const GAME_REWARDS = {
         }
     });
 
-    // Modal submit handler
     const modalFilter = (i: ModalSubmitInteraction) => i.customId === 'kod_number_select' && game.hasPlayer(i.user.id);
 
-    // Store the modal event handler in a variable so it can be removed later
     const modalHandler = async (modal: any) => {
         if (!modal.isModalSubmit()) return;
         if (!modalFilter(modal)) return;
@@ -442,7 +449,6 @@ const GAME_REWARDS = {
         const player = game.getPlayer(modal.user.id);
         if (!player || player.hasSelected) return;
 
-        // Handle low sanity effects
         if (player.sanity < 30) {
             const glitched = glitchText('Your hands are shaking... you can barely focus...');
             await modal.reply({
@@ -467,7 +473,6 @@ const GAME_REWARDS = {
             });
         }
 
-        // Update embed to show who has selected
         const selectedPlayers = game.getActivePlayers()
             .map(p => `${p.name} (${p.score})${p.hasSelected ? ' ✓' : ''}`)
             .join('\n');
@@ -482,20 +487,29 @@ const GAME_REWARDS = {
         });
 
         if (game.allPlayersSelected()) {
-            buttonCollector.stop('all_selected');
+            if (buttonCollector) {
+                buttonCollector.stop('all_selected');
+            }
         }
     };
 
     interaction.client.on('interactionCreate', modalHandler);
-
-    // Optionally, you may want to remove the event listener after the round ends to avoid memory leaks.
     buttonCollector.on('end', async () => {
         interaction.client.removeListener('interactionCreate', modalHandler);
         await processRoundResults(interaction, game, channelId);
     });
+    } catch (error) {
+        console.error('Error in startRound:', error);
+        if (buttonCollector) {
+            await cleanupCollector(buttonCollector);
+        }
+        await safeInteractionUpdate(interaction, {
+            content: 'An error occurred while starting the round.',
+            components: []
+        });
+    }
 }
-  
-  // Replace the createNumberSelectionButtons function with:
+
 async function showNumberSelectionModal(interaction: ButtonInteraction | CommandInteraction) {
     const modal = new ModalBuilder()
         .setCustomId('kod_number_select')
@@ -525,7 +539,6 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
     let results = game.evaluateRound();
     
     if (!results) {
-      // Some players didn't select a number, assign random numbers
       game.assignRandomNumbers();
       results = game.evaluateRound();
       
@@ -550,7 +563,6 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
 
     const components: ActionRowBuilder<ButtonBuilder>[] = [];
     
-    // Phase 1: Add life reduction option for winners
     if (game.getPhase() === 1 && results.winners.length > 0) {
       const row = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
@@ -562,7 +574,6 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
       components.push(row);
     }
     
-    // Phase 2: Add team formation option
     if (game.getPhase() === 2 && !game.allPlayersSelected()) {
       const row = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
@@ -579,7 +590,6 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
       components
     });
 
-    // Set up collectors for the new buttons
     if (components.length > 0) {
       const collector = interaction.channel?.createMessageComponentCollector({
         componentType: ComponentType.Button,
@@ -587,18 +597,15 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
       });
 
       collector?.on('collect', async (i: ButtonInteraction) => {
-        // Verify the interaction is from a winner for life reduction
         if (i.customId === 'kod_reduce_life' && results.winners.includes(i.user.id)) {
           await handleLifeReduction(i, game);
         } 
-        // Verify the interaction is from an active player for team formation
         else if (i.customId === 'kod_form_team' && game.getActivePlayers().some(p => p.id === i.user.id)) {
           await handleTeamFormation(i, game);
         }
       });
     }
     
-    // Check for eliminated players and continue game
     const eliminatedPlayers = game.checkForEliminations();
     
     if (eliminatedPlayers.length > 0) {
@@ -611,7 +618,6 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
         embeds: [eliminationEmbed]
       });
       
-      // Check if a new rule should be introduced
       if (game.shouldAddNewRule()) {
         const newRule = game.addNewRule();
         
@@ -626,7 +632,6 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
       }
     }
     
-    // Check if game is over
     if (game.isGameOver()) {
       const winner = game.getWinner();
       const losers = game.getPlayers().filter(p => p.id !== winner?.id);
@@ -649,7 +654,6 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
           });
         }
     
-          // Update losers' stats
           for (const loser of losers) {
             const loserUser = await User.findOne({ discordId: loser.id });
             if (loserUser) {
@@ -684,12 +688,10 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
       await interaction.followUp({ embeds: [gameOverEmbed] });
     }
     
-    // Clean up the game
     activeGames.delete(channelId);
     return;
     }
     
-    // Start the next round
     setTimeout(() => {
       startRound(interaction, game, channelId);
     }, 30000);
@@ -893,10 +895,44 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
       return;
     }
     
-    // Handle button interactions specific to this command
-    // This is called from the main button handler in index.ts
   }
 
 function getColorFromPrisonColor(colorKey: keyof typeof PRISON_COLORS): ColorResolvable {
     return PRISON_COLORS[colorKey] as ColorResolvable;
+}
+
+async function safeInteractionUpdate(interaction: ButtonInteraction | CommandInteraction, data: any) {
+  try {
+    if (!interaction.deferred && !interaction.replied) {
+      if ('deferUpdate' in interaction) {
+        await interaction.deferUpdate();
+      } else {
+        await interaction.deferReply();
+      }
+    }
+    
+    if ('editReply' in interaction) {
+      await interaction.editReply(data);
+    }
+  } catch (error) {
+    console.error('Error updating interaction:', error);
+    try {
+      if ('followUp' in interaction) {
+        await interaction.followUp({
+          content: 'An error occurred while processing your request.',
+          ephemeral: true
+        });
+      }
+    } catch (followUpError) {
+      console.error('Error sending follow-up:', followUpError);
+    }
+  }
+}
+
+async function cleanupCollector(collector: InteractionCollector<any>) {
+  try {
+    collector.stop();
+  } catch (error) {
+    console.error('Error cleaning up collector:', error);
+  }
 }

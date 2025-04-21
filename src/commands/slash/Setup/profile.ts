@@ -22,7 +22,7 @@ import { PRISON_COLORS, createProgressBar } from '../../../constants/GAME_CONSTA
 import { UserDocument } from '../../../model/user_status';
 
 export default new SlashCommand({
-  registerType: RegisterType.Guild,
+  registerType: RegisterType.Global,
 
   data: new SlashCommandBuilder()
     .setName('profile')
@@ -51,8 +51,7 @@ export default new SlashCommand({
     const subcommand = interaction.options.getSubcommand();
     
     await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-    
-    // Get or create user in database
+ 
     let userData = await UserService.getUserData(targetUser.id, member);
     
     if (!userData) {
@@ -147,7 +146,6 @@ async function showProfile(interaction: ChatInputCommandInteraction, userData: U
     components: [row]
   });
   
-  // Set timeout duration to 60 seconds
   const timeoutDuration = 60000;
   
   const collector = interaction.channel?.createMessageComponentCollector({
@@ -205,7 +203,6 @@ async function showInventory(interaction: ButtonInteraction, userData: UserDocum
       .setStyle(ButtonStyle.Secondary)
   );
   
-  // Update with current components - the collector from the parent function handles the timeout
   await interaction.update({
     embeds: [inventoryEmbed],
     components: [backButton]
@@ -229,7 +226,6 @@ async function showStats(interaction: ButtonInteraction, userData: UserDocument)
       .setStyle(ButtonStyle.Secondary)
   );
   
-  // Update with current components - the collector from the parent function handles the timeout
   await interaction.update({
     embeds: [statsEmbed],
     components: [backButton]
@@ -277,7 +273,6 @@ async function showDetailedStats(interaction: ChatInputCommandInteraction, userD
     components: [actionsRow]
   });
   
-  // Set timeout duration to 60 seconds
   const timeoutDuration = 60000;
   
   const collector = interaction.channel?.createMessageComponentCollector({

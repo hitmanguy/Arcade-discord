@@ -23,7 +23,7 @@ const GAME_REWARDS = {
 };
 const activeGames = new Map();
 exports.default = new handler_1.SlashCommand({
-    registerType: handler_1.RegisterType.Guild,
+    registerType: handler_1.RegisterType.Global,
     data: new discord_js_1.SlashCommandBuilder()
         .setName('king-of-diamonds')
         .setDescription('Play the King of Diamonds game from Alice in Borderland')
@@ -51,7 +51,7 @@ exports.default = new handler_1.SlashCommand({
             return;
         }
         const merit = user.meritPoints;
-        if (merit < 100) {
+        if (merit < 400) {
             await interaction.reply('You dont have enough merit points to play this. You can play the previous game to earn more points');
             return;
         }
@@ -201,39 +201,55 @@ async function handleJoinButton(interaction, game, embed) {
     }
 }
 async function handleGameJoin(interaction) {
-    const channelId = interaction.channelId;
-    const game = activeGames.get(channelId);
-    if (!game) {
+    try {
+        const channelId = interaction.channelId;
+        const game = activeGames.get(channelId);
+        if (!game) {
+            await interaction.reply({
+                content: 'There is no active King of Diamonds game in this channel! Use `/king-of-diamonds start` to start one.',
+                flags: [discord_js_1.MessageFlags.Ephemeral]
+            });
+            return;
+        }
+        if (game.hasPlayer(interaction.user.id)) {
+            await interaction.reply({
+                content: 'You have already joined this game!',
+                flags: [discord_js_1.MessageFlags.Ephemeral]
+            });
+            return;
+        }
+        const user = await user_status_1.User.findOne({ discordId: interaction.user.id });
+        if (!user) {
+            await interaction.reply({
+                content: 'You must be registered to join the game. Use `/register` first.',
+                flags: [discord_js_1.MessageFlags.Ephemeral]
+            });
+            return;
+        }
+        const success = game.addPlayer({
+            id: interaction.user.id,
+            name: interaction.user.username,
+            sanity: user.sanity
+        });
+        if (!success) {
+            await interaction.reply({
+                content: 'Failed to join the game. The game might be full or already started.',
+                flags: [discord_js_1.MessageFlags.Ephemeral]
+            });
+            return;
+        }
         await interaction.reply({
-            content: 'There is no active King of Diamonds game in this channel! Use `/king-of-diamonds start` to start one.',
+            content: `You've joined the King of Diamonds game! Wait for the host to start the game.`,
             flags: [discord_js_1.MessageFlags.Ephemeral]
         });
-        return;
     }
-    if (game.hasPlayer(interaction.user.id)) {
+    catch (error) {
+        console.error('Error in handleGameJoin:', error);
         await interaction.reply({
-            content: 'You have already joined this game!',
+            content: 'An error occurred while trying to join the game.',
             flags: [discord_js_1.MessageFlags.Ephemeral]
         });
-        return;
     }
-    const user = await user_status_1.User.findOne({ discordId: interaction.user.id });
-    const success = game.addPlayer({
-        id: interaction.user.id,
-        name: interaction.user.username,
-        sanity: user?.sanity || 100
-    });
-    if (!success) {
-        await interaction.reply({
-            content: 'Failed to join the game. The game might be full or already started.',
-            flags: [discord_js_1.MessageFlags.Ephemeral]
-        });
-        return;
-    }
-    await interaction.reply({
-        content: `You've joined the King of Diamonds game! Wait for the host to start the game.`,
-        flags: [discord_js_1.MessageFlags.Ephemeral]
-    });
 }
 async function handleShowRules(interaction) {
     const embed = new discord_js_1.EmbedBuilder()
@@ -265,100 +281,122 @@ async function startGame(interaction, game, channelId) {
     await startRound(interaction, game, channelId);
 }
 async function startRound(interaction, game, channelId) {
-    await game.startRound();
-    const embed = new discord_js_1.EmbedBuilder()
-        .setColor('#FF0000')
-        .setTitle(`King of Diamonds - Round ${game.getRound()}`)
-        .setDescription('Make your selection!')
-        .addFields({ name: 'Time Remaining', value: '30 seconds', inline: true }, { name: 'Players', value: game.getActivePlayers().map(p => `${p.name} (${p.score})`).join('\n'), inline: true });
-    const row = new discord_js_1.ActionRowBuilder()
-        .addComponents(new discord_js_1.ButtonBuilder()
-        .setCustomId('kod_select_number')
-        .setLabel('Select Your Number')
-        .setStyle(discord_js_1.ButtonStyle.Primary));
-    const response = await interaction.followUp({
-        embeds: [embed],
-        components: [row]
-    });
-    const buttonCollector = response.createMessageComponentCollector({
-        componentType: discord_js_1.ComponentType.Button,
-        time: 30000
-    });
-    buttonCollector.on('collect', async (i) => {
-        if (i.customId === 'kod_select_number') {
-            const player = game.getPlayer(i.user.id);
-            if (!player) {
-                await i.reply({
-                    content: 'You are not part of this game!',
-                    flags: discord_js_1.MessageFlags.Ephemeral
-                });
-                return;
-            }
-            if (player.hasSelected) {
-                await i.reply({
-                    content: 'You have already made your selection for this round!',
-                    flags: discord_js_1.MessageFlags.Ephemeral
-                });
-                return;
-            }
-            await showNumberSelectionModal(i);
-        }
-    });
-    const modalFilter = (i) => i.customId === 'kod_number_select' && game.hasPlayer(i.user.id);
-    const modalHandler = async (modal) => {
-        if (!modal.isModalSubmit())
-            return;
-        if (!modalFilter(modal))
-            return;
-        const number = parseInt(modal.fields.getTextInputValue('selected_number'));
-        if (isNaN(number) || number < 0 || number > 100) {
-            await modal.reply({
-                content: 'Please enter a valid number between 0 and 100!',
-                flags: discord_js_1.MessageFlags.Ephemeral
-            });
-            return;
-        }
-        const player = game.getPlayer(modal.user.id);
-        if (!player || player.hasSelected)
-            return;
-        if (player.sanity < 30) {
-            const glitched = (0, text_util_1.glitchText)('Your hands are shaking... you can barely focus...');
-            await modal.reply({
-                content: glitched,
-                flags: discord_js_1.MessageFlags.Ephemeral
-            });
-            const actualNumber = Math.random() < 0.7 ? number : Math.floor(Math.random() * 101);
-            game.selectNumber(modal.user.id, actualNumber);
-            setTimeout(async () => {
-                await modal.followUp({
-                    content: (0, text_util_1.glitchText)(`You selected: ${actualNumber}`),
-                    flags: discord_js_1.MessageFlags.Ephemeral
-                });
-            }, 1500);
-        }
-        else {
-            game.selectNumber(modal.user.id, number);
-            await modal.reply({
-                content: `You selected: ${number}`,
-                flags: discord_js_1.MessageFlags.Ephemeral
-            });
-        }
-        const selectedPlayers = game.getActivePlayers()
-            .map(p => `${p.name} (${p.score})${p.hasSelected ? ' ✓' : ''}`)
-            .join('\n');
-        embed.setFields({ name: 'Time Remaining', value: 'Waiting for players...', inline: true }, { name: 'Players', value: selectedPlayers, inline: true });
-        await response.edit({
-            embeds: [embed]
+    let buttonCollector = null;
+    try {
+        await game.startRound();
+        const embed = new discord_js_1.EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle(`King of Diamonds - Round ${game.getRound()}`)
+            .setDescription('Make your selection!')
+            .addFields({ name: 'Time Remaining', value: '30 seconds', inline: true }, { name: 'Players', value: game.getActivePlayers().map(p => `${p.name} (${p.score})`).join('\n'), inline: true });
+        const row = new discord_js_1.ActionRowBuilder()
+            .addComponents(new discord_js_1.ButtonBuilder()
+            .setCustomId('kod_select_number')
+            .setLabel('Select Your Number')
+            .setStyle(discord_js_1.ButtonStyle.Primary));
+        const response = await interaction.followUp({
+            embeds: [embed],
+            components: [row]
         });
-        if (game.allPlayersSelected()) {
-            buttonCollector.stop('all_selected');
+        buttonCollector = response.createMessageComponentCollector({
+            componentType: discord_js_1.ComponentType.Button,
+            time: 30000
+        });
+        buttonCollector.on('error', async (error) => {
+            console.error('Collector error:', error);
+            await safeInteractionUpdate(interaction, {
+                content: 'An error occurred during the game round.',
+                components: []
+            });
+        });
+        buttonCollector.on('collect', async (i) => {
+            if (i.customId === 'kod_select_number') {
+                const player = game.getPlayer(i.user.id);
+                if (!player) {
+                    await i.reply({
+                        content: 'You are not part of this game!',
+                        flags: discord_js_1.MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+                if (player.hasSelected) {
+                    await i.reply({
+                        content: 'You have already made your selection for this round!',
+                        flags: discord_js_1.MessageFlags.Ephemeral
+                    });
+                    return;
+                }
+                await showNumberSelectionModal(i);
+            }
+        });
+        const modalFilter = (i) => i.customId === 'kod_number_select' && game.hasPlayer(i.user.id);
+        const modalHandler = async (modal) => {
+            if (!modal.isModalSubmit())
+                return;
+            if (!modalFilter(modal))
+                return;
+            const number = parseInt(modal.fields.getTextInputValue('selected_number'));
+            if (isNaN(number) || number < 0 || number > 100) {
+                await modal.reply({
+                    content: 'Please enter a valid number between 0 and 100!',
+                    flags: discord_js_1.MessageFlags.Ephemeral
+                });
+                return;
+            }
+            const player = game.getPlayer(modal.user.id);
+            if (!player || player.hasSelected)
+                return;
+            if (player.sanity < 30) {
+                const glitched = (0, text_util_1.glitchText)('Your hands are shaking... you can barely focus...');
+                await modal.reply({
+                    content: glitched,
+                    flags: discord_js_1.MessageFlags.Ephemeral
+                });
+                const actualNumber = Math.random() < 0.7 ? number : Math.floor(Math.random() * 101);
+                game.selectNumber(modal.user.id, actualNumber);
+                setTimeout(async () => {
+                    await modal.followUp({
+                        content: (0, text_util_1.glitchText)(`You selected: ${actualNumber}`),
+                        flags: discord_js_1.MessageFlags.Ephemeral
+                    });
+                }, 1500);
+            }
+            else {
+                game.selectNumber(modal.user.id, number);
+                await modal.reply({
+                    content: `You selected: ${number}`,
+                    flags: discord_js_1.MessageFlags.Ephemeral
+                });
+            }
+            const selectedPlayers = game.getActivePlayers()
+                .map(p => `${p.name} (${p.score})${p.hasSelected ? ' ✓' : ''}`)
+                .join('\n');
+            embed.setFields({ name: 'Time Remaining', value: 'Waiting for players...', inline: true }, { name: 'Players', value: selectedPlayers, inline: true });
+            await response.edit({
+                embeds: [embed]
+            });
+            if (game.allPlayersSelected()) {
+                if (buttonCollector) {
+                    buttonCollector.stop('all_selected');
+                }
+            }
+        };
+        interaction.client.on('interactionCreate', modalHandler);
+        buttonCollector.on('end', async () => {
+            interaction.client.removeListener('interactionCreate', modalHandler);
+            await processRoundResults(interaction, game, channelId);
+        });
+    }
+    catch (error) {
+        console.error('Error in startRound:', error);
+        if (buttonCollector) {
+            await cleanupCollector(buttonCollector);
         }
-    };
-    interaction.client.on('interactionCreate', modalHandler);
-    buttonCollector.on('end', async () => {
-        interaction.client.removeListener('interactionCreate', modalHandler);
-        await processRoundResults(interaction, game, channelId);
-    });
+        await safeInteractionUpdate(interaction, {
+            content: 'An error occurred while starting the round.',
+            components: []
+        });
+    }
 }
 async function showNumberSelectionModal(interaction) {
     const modal = new discord_js_1.ModalBuilder()
@@ -670,5 +708,42 @@ async function handleKingsOfDiamondsButton(interaction) {
 }
 function getColorFromPrisonColor(colorKey) {
     return GAME_CONSTANTS_1.PRISON_COLORS[colorKey];
+}
+async function safeInteractionUpdate(interaction, data) {
+    try {
+        if (!interaction.deferred && !interaction.replied) {
+            if ('deferUpdate' in interaction) {
+                await interaction.deferUpdate();
+            }
+            else {
+                await interaction.deferReply();
+            }
+        }
+        if ('editReply' in interaction) {
+            await interaction.editReply(data);
+        }
+    }
+    catch (error) {
+        console.error('Error updating interaction:', error);
+        try {
+            if ('followUp' in interaction) {
+                await interaction.followUp({
+                    content: 'An error occurred while processing your request.',
+                    ephemeral: true
+                });
+            }
+        }
+        catch (followUpError) {
+            console.error('Error sending follow-up:', followUpError);
+        }
+    }
+}
+async function cleanupCollector(collector) {
+    try {
+        collector.stop();
+    }
+    catch (error) {
+        console.error('Error cleaning up collector:', error);
+    }
 }
 //# sourceMappingURL=beautycontest.js.map

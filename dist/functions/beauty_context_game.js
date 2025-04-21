@@ -7,10 +7,15 @@ class KingsOfDiamondsGame {
     phase = 1;
     eliminationScore = 0;
     hasStarted = false;
+    lastActionTime = {};
+    actionCooldown = 2000;
     ruleStack = [
         "If a player chooses 0, the player who chooses 100 wins the round.",
         "If a player exactly hits the rounded off Regal's number, the loser penalty is doubled.",
-        "If there are 2 people or more who choose the same number, the number they choose becomes invalid and the players who chose the same number will lose a point even if the number is closest to Regal's number."
+        "If there are 2 people or more who choose the same number, the number they choose becomes invalid and the players who chose the same number will lose a point even if the number is closest to Regal's number.",
+        "If the average of all numbers is prime, everyone loses 2 points except the player closest to the average.",
+        "If any player's number matches their current score, they lose 3 points.",
+        "If all numbers chosen are either even or odd, everyone loses 1 point."
     ];
     activeRules = [];
     constructor() {
@@ -69,13 +74,27 @@ class KingsOfDiamondsGame {
         return this.round;
     }
     selectNumber(playerId, number) {
-        const player = this.players.find(p => p.id === playerId && !p.isEliminated);
-        if (!player) {
+        try {
+            if (!this.validatePlayerAction(playerId)) {
+                return false;
+            }
+            const player = this.players.find(p => p.id === playerId && !p.isEliminated);
+            if (!player)
+                return false;
+            if (player.sanity < 30) {
+                if (Math.random() < 0.3) {
+                    const variation = Math.floor(Math.random() * 20) - 10;
+                    number = Math.max(0, Math.min(100, number + variation));
+                }
+            }
+            player.selectedNumber = number;
+            player.hasSelected = true;
+            return true;
+        }
+        catch (error) {
+            console.error('Error in selectNumber:', error);
             return false;
         }
-        player.selectedNumber = number;
-        player.hasSelected = true;
-        return true;
     }
     allPlayersSelected() {
         return this.getActivePlayers().every(p => p.hasSelected);
@@ -344,7 +363,24 @@ class KingsOfDiamondsGame {
         return this.phase;
     }
     getRules() {
-        return this.activeRules[-1];
+        try {
+            return this.activeRules.length > 0 ?
+                this.activeRules[this.activeRules.length - 1] :
+                'No active rules.';
+        }
+        catch (error) {
+            console.error('Error getting rules:', error);
+            return 'Error retrieving rules.';
+        }
+    }
+    validatePlayerAction(playerId) {
+        const now = Date.now();
+        const lastAction = this.lastActionTime[playerId] || 0;
+        if (now - lastAction < this.actionCooldown) {
+            return false;
+        }
+        this.lastActionTime[playerId] = now;
+        return true;
     }
 }
 exports.KingsOfDiamondsGame = KingsOfDiamondsGame;

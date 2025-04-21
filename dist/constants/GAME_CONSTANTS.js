@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PUZZLE_REWARDS = exports.RANKS = exports.SANITY_EFFECTS = exports.STORYLINE = exports.STARTER_ITEMS = exports.PRISON_SKILLS = exports.PRISON_AREAS = exports.PRISON_COLORS = void 0;
+exports.handleInteractionError = exports.PUZZLE_REWARDS = exports.RANKS = exports.SANITY_EFFECTS = exports.STORYLINE = exports.STARTER_ITEMS = exports.PRISON_SKILLS = exports.PRISON_AREAS = exports.PRISON_COLORS = void 0;
 exports.createProgressBar = createProgressBar;
+const discord_js_1 = require("discord.js");
 exports.PRISON_COLORS = {
     primary: '#1a1a2e',
     secondary: '#16213e',
@@ -56,7 +57,7 @@ exports.STORYLINE = {
         flavorText: "The deeper you go, the more the walls seem to shift and change...",
         slash: "Use ./tunnel to play",
         access: "acquire 50 merits point to unlock",
-        merit: 50
+        merit: 100
     },
     matchingpairs: {
         name: "🎴 Memory Test",
@@ -64,7 +65,7 @@ exports.STORYLINE = {
         flavorText: "The symbols dance before your eyes. Are they changing, or is it just your imagination?",
         slash: "Use ./matching to play",
         access: "acquire 100 merits point to unlock",
-        merit: 100
+        merit: 200
     },
     UNO: {
         name: "🃏 Digital Card Protocol",
@@ -72,7 +73,7 @@ exports.STORYLINE = {
         flavorText: "Even a simple game of cards feels sinister in this place...",
         slash: "Use ./uno to play",
         access: "acquire 150 merits point to unlock",
-        merit: 150
+        merit: 300
     },
     "numbers-game-command": {
         name: "🔢 The Numbers Protocol",
@@ -80,21 +81,51 @@ exports.STORYLINE = {
         flavorText: "The true nature of this prison begins to reveal itself...",
         slash: "Use ./number-game create/join/rule to play",
         access: "acquire 200 merits point to unlock",
-        merit: 200
+        merit: 400
     }
 };
 exports.SANITY_EFFECTS = {
     glitchMessages: [
-        "T̷̢̨̝͉̖̦̩̙̤͕̰͈͛̎̃̿̋̓̒͂̓̌͛̄̈́̍͑͂͗͒̔͋̌̒̂̈́͜͝͝h̵̞̺̪̳̱̭̠̫̜̰̉͛̓̆̏̐̒͘͝ȅ̷̙͚͔̗͓̪̟̂̓͗̃̾͋̽̿͂̉̾̈́̐̌̾͗̊̈́̀͒̅͜͝͝ ̷̧̛̛̛̭̣͚̯͈̥̰̫̼͔̪̤̯̪̬͓̜̹̎́̉͗̆̓̏͂̃͋̍̅͒̌̔͂̈́̑̾̈́̚͜͝͝w̷̢̧̛̠̟͖̺̲͎̜̳̯̩̻̖̘͚̥̻̥̗̺̦̪͙̞̓̉̔͑͆̊̆̃̈́̃̉̈́̑̓̃̓̈́͊͜͠ą̴̧̡̧̢̨̛̛̻̮̮̝͉̲̲̥̯͕͈͈̝̥̹͓̞͚̹̠̬̯̠̰̖̫̥̱̣͒̂̅̋̈́͛̚͜ͅl̶̡̢̻̪̲̠̤̹̟͉̱͖͙͎̱̠̯̣͚̜̈́͜ͅl̸̨̧̛̛̦̣̟̮̯̮̜͎̩̭̤̩̭͍̱̫͎̘̯͍͈͚̠̩̯̩̱̦̹͉̺̈́̃̈́͗̍͒̓̈́̑̋̍͌̑̒̐͒͌̎͘͜͜͝͠ͅs̶̨̡̧̻̗̼͓̯͓̘̼̤͖̘͔͎̳̤̮͚͔̥͖̻̄͌̎̏͂̈́̌́̊̄̈́̑͛̍̋̎̄̀͑̉̓̓̔͗̅̎̕̚̚̚͜͠͠͝ ̶̲̤͇̋̋̄̔̉̓͆̐̉͆̽̈́̆̌̈͘̕̕͝͝͝͝a̴̧̛̪̞̝̩̰͖̖͖͍͚̮̞̫̰͉̭̥̝̹̗͗̍͑̌͗̾̽̇̄̎̓̋̐͝͝͝ͅr̷̛̬̳̈́̽̃̈́̽̃̆̊̎̃̈́͗̄͆̓͋̎̓̄̉̑̓͛̿̌̾̒̚͝͝ḙ̵̢̡̛͖̝̦͓̠̯̳͚̰̩̫͚̳̘̱̳̝̝̪̪̝͚̰͖̺͈͈̤̺͈̘̈́̅̄͐̃̒͋̂̒̉͗̃͂́̀̍̑͐̈́̌̈̋̂̈́̚̕͜͝͠͝͠ͅ ̸̨̢̨̡̛̛͚̹̺̦͔͉͔̪̗̭͖̲̗͔̘̗̦̱̖̪͖̯͍̣̤͙̺̟̗͖͑̉̉̈́͂̎̾̅̿̍̈́̃͊̿̃̉̊͘͞͝͝ͅͅç̵̧̩͇̪̱̰̙͓̜͖̜̼͍̥͕̰͓̤͔̙ͱ̹̩̫̮̞̹̝̣̬̽̌͐͆̄̇̓̃͊̐͝ļ̷̟̦͍̘͖̣̳̲͕͔̝̪̮͕̲̣̬̱̟̥̯̲̭̪̤̰̥͗̇̚͜͜ͅō̵̢̜̦̙̰̟̟̺̜͙̲̮̗̤̜̺͖͓̎̎̄̑̾̿̓̾̂͌̎̈͌͑͂̄͜͠͝ṡ̸̨̨̢̛̹̘͇͇̮͔̥͍̯̳̘̥̤̗̖̘̟̩̭͎̥̖̝͍̣̭̺̍̔̓̆̈̑̄̈́̈̊̔̆̈̎̾̕͜͝ͅͅỉ̵̡̧̧̲̘͕̰͖̦̩̱̣̣̩̜̝̫̄̿̑̈́͒̓̐̔̉̎̏͜͠ͅn̵̡̢̢̢̨̨̧̯̰̦̰̪̙̫̻̱͓̦̬̼̬̼̫̘̗͔̭̣̫̙̲̼̭̝̉̌͑̓͑̿̏̔̒̀̏̈̿͗̑͛͊͗̈̓͗͐́̿̓͊͌̕͘̕͝͝ģ̸̢̥͙͇̻̭̼̣͐̿̇͂̓̏̋͌̒͗̅̍̍͐̒̕̚͝ ̶̛̬͙̝̣̩̺̹͚̻̐̊̾̍̾̈́̊̈́̌̈́̃͛̑̈̎̎̒̈́͘̕͘͘̚͝į̶̢̛̛̘͙̱̯̺͈̠͗́͂̋͗̈́͋̏̈́̅͑͋̏̾̆͌̓̃̈́̒̎̋̊̚͜͝͝͠͝n̷̛̤̖̰̝̣̹͛̊͆̊͑̿̓̊̍̊̾̿̈́͋̊̂̾̆͆̆͒̍̒̂͝͝...",
-        "Do you see them too? The shadows that move when you're not looking?",
-        "W̷̧̛h̴͎̓y̷̢̛ ̶͈̈́d̶͕̏ȍ̷͜ ̶͎͝t̵̰̾h̷͍̆e̶͇͝ỳ̷̟ ̶͍̈́k̴͕̾ȇ̶̲e̷̲̓p̷̣̈́ ̴̲̆w̶͖̆a̷͔͑t̵̥͆c̵̮̈́h̷̳͌i̵̭̓n̴͕̈́g̷̣̈?̸̦̇",
-        "The numbers... they're speaking to me...",
-        "ERROR: Reality breach detected"
+        'T̷h̵e̴ ̷w̴a̷l̸l̵s̷ ̴w̶a̵t̸c̸h̷.̵.̶.',
+        `S̵h̵a̴d̸o̵w̷s̶ ̷w̶h̵i̷s̶p̶e̸r̷.̵.̶.`,
+        `T̷h̵e̷y̵'̸r̵e̸ ̴c̷o̵m̷i̵n̵g̷.̴.̷.`,
+        `D̵o̶n̷'̸t̴ ̶t̵r̷u̸s̵t̴ ̷t̸h̵e̷m̵.̶.̶.`,
+        `Y̶o̸u̵r̴ ̶m̸i̸n̷d̸ ̶b̸e̷t̵r̸a̸y̵s̸ ̴y̵o̷u̶.̷.̷.`,
+        'R̵e̷a̸l̴i̷t̸y̶ ̷b̶e̵n̷d̸s̵.̸.̶.',
+        'T̸i̸m̴e̵ ̵f̸r̸a̴c̷t̵u̷r̷e̸s̵.̶.̶.',
+        `D̵o̶n̷'̸t̴ ̶l̵o̵o̶k̶ ̴b̸e̵h̸i̸n̷d̵.̵.̶.`,
+        'E̶s̵c̸a̴p̸e̷ ̴i̸s̴ ̵a̸n̷ ̵i̸l̶l̷u̷s̵i̸o̸n̷.̶.̶. '
     ],
-    visualEffects: {
-        low: "subtle-distortion",
-        medium: "screen-glitch",
-        critical: "severe-corruption"
+    visualDistortions: {
+        mild: ['🌀', '👁️', '⚡', '💀', '🕯️', '🎭'],
+        severe: ['⛧', '❌', '⚠️', '☠️', '🔪', '👻'],
+        symbols: ['҉', '̷', '̵', '̴', '̶', '̸']
+    },
+    hallucinations: {
+        messages: [
+            'Did that symbol just move?',
+            'The cards are watching you...',
+            'Your reflection blinks...',
+            'Shadows dance at the corners...',
+            'Time flows backwards...',
+            'Reality glitches...'
+        ],
+        distortCards: (text, sanity) => {
+            if (sanity > 70)
+                return text;
+            const intensity = (100 - sanity) / 100;
+            const symbols = exports.SANITY_EFFECTS.visualDistortions.symbols;
+            return text.split('').map(char => {
+                if (Math.random() < intensity * 0.3) {
+                    const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+                    return char + symbol;
+                }
+                if (Math.random() < intensity * 0.2) {
+                    return exports.SANITY_EFFECTS.visualDistortions[sanity < 30 ? 'severe' : 'mild'][Math.floor(Math.random() * exports.SANITY_EFFECTS.visualDistortions[sanity < 30 ? 'severe' : 'mild'].length)];
+                }
+                return char;
+            }).join('');
+        }
     }
 };
 exports.RANKS = {
@@ -121,28 +152,45 @@ exports.RANKS = {
 };
 exports.PUZZLE_REWARDS = {
     easy: {
-        success: { meritPoints: 10, sanity: 5 },
-        failure: { meritPoints: -5, sanity: -3 }
+        success: { meritPoints: 8, sanity: 2 },
+        failure: { meritPoints: -15, sanity: -8, suspicion: 10 }
     },
     medium: {
-        success: { meritPoints: 20, sanity: 8 },
-        failure: { meritPoints: -10, sanity: -5 }
+        success: { meritPoints: 15, sanity: 3 },
+        failure: { meritPoints: -20, sanity: -12, suspicion: 15 }
     },
     hard: {
-        success: { meritPoints: 30, sanity: 12 },
-        failure: { meritPoints: -15, sanity: -8 }
-    },
-    judas: {
-        traitor: {
-            success: { meritPoints: 50, sanity: 15, suspicion: 25 },
-            failure: { meritPoints: -50, sanity: -20, suspicion: 25 }
-        },
-        innocent: {
-            success: { meritPoints: 30, sanity: 10 },
-            failure: { meritPoints: -30, sanity: -15, suspicion: 20 }
-        }
+        success: { meritPoints: 25, sanity: 5 },
+        failure: { meritPoints: -30, sanity: -15, suspicion: 20 }
     }
 };
+const handleInteractionError = async (error, interaction) => {
+    console.error('Interaction error:', error);
+    try {
+        const errorEmbed = new discord_js_1.EmbedBuilder()
+            .setColor(exports.PRISON_COLORS.danger)
+            .setTitle('⚠️ System Malfunction')
+            .setDescription('A critical error occurred in the prison systems.')
+            .setFooter({ text: 'The walls remember your failure...' });
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({
+                embeds: [errorEmbed],
+                components: [],
+                ephemeral: true
+            });
+        }
+        else {
+            await interaction.reply({
+                embeds: [errorEmbed],
+                ephemeral: true
+            });
+        }
+    }
+    catch (followupError) {
+        console.error('Error handling interaction error:', followupError);
+    }
+};
+exports.handleInteractionError = handleInteractionError;
 function createProgressBar(value, max, options = {}) {
     const length = options.length || 10;
     const chars = options.chars || { empty: '▱', filled: '▰' };

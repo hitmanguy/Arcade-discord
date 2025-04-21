@@ -5,7 +5,7 @@ const discord_js_1 = require("discord.js");
 const Device_schema_1 = require("../../../model/Device_schema");
 const user_status_1 = require("../../../model/user_status");
 exports.default = new handler_1.SlashCommand({
-    registerType: handler_1.RegisterType.Guild,
+    registerType: handler_1.RegisterType.Global,
     data: new discord_js_1.SlashCommandBuilder()
         .setName('restart')
         .setDescription('restart your progress and reset your device'),

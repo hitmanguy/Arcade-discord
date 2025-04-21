@@ -90,10 +90,10 @@ You’re racing against time. Crack numeric codes, predict patterns, and solve c
 3. **Wrong answers** reduce sanity and increase suspicion.
 4. Track progress anytime with `/progress`.
 5. Unlock levels as follows:
-   - Tunnel: 50+ merit
-   - Memory Test: 100+ merit
-   - Digital Card Protocol: 150+ merit
-   - Numbers Protocol: 200+ merit
+   - Tunnel: 100+ merit
+   - Memory Test: 200+ merit
+   - Digital Card Protocol: 300+ merit
+   - Numbers Protocol: 400+ merit
 6. Choose game mode:
    - 🧑‍🤝‍🧑 **Co-Op**: Team up, solve together, share rewards.
    - 🧨 **Sabotage**: Deceive teammates and steal merit — fail, and pay a price.
@@ -123,10 +123,10 @@ Stay sharp and play smart!
 
 ```bash
 # 1. Clone the repository
-$ git clone https://github.com/your-repo/prison-escape-bot.git
+$ git clone https://github.com/hitmanguy/Arcade-discord.git
 
 # 2. Navigate to the project folder
-$ cd prison-escape-bot
+$ cd Arcade-discord
 
 # 3. Install dependencies
 $ npm install

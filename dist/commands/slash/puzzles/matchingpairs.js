@@ -32,14 +32,18 @@ function createGame(difficulty) {
         const j = Math.floor(Math.random() * (i + 1));
         [cards[i], cards[j]] = [cards[j], cards[i]];
     }
+    const maxMoves = difficulty === 'easy' ? pairs * 2.5 :
+        difficulty === 'medium' ? pairs * 2 :
+            pairs * 1.5;
     return {
         cards,
         firstCard: null,
         secondCard: null,
         moves: 0,
         matches: 0,
-        maxMoves: pairs * 3,
-        processingMatch: false
+        maxMoves: Math.floor(maxMoves),
+        processingMatch: false,
+        timeoutWarnings: 0
     };
 }
 function createBoardEmbed(game, user, difficulty) {
@@ -57,7 +61,7 @@ function createBoardEmbed(game, user, difficulty) {
             if (user.sanity < 30 && Math.random() < 0.2) {
                 return ['❓', '❔', '⁉️', '‼️'][Math.floor(Math.random() * 4)];
             }
-            return '❔';
+            return card.temporaryEmoji || '❔';
         }).join(' ') + '\n';
     }
     return new discord_js_1.EmbedBuilder()
@@ -96,7 +100,7 @@ function createGameButtons(game, user) {
     return rows;
 }
 exports.default = new handler_1.SlashCommand({
-    registerType: handler_1.RegisterType.Guild,
+    registerType: handler_1.RegisterType.Global,
     data: new discord_js_1.SlashCommandBuilder()
         .setName('matching')
         .setDescription('Test your memory in the symbol matching protocol')
@@ -105,202 +109,261 @@ exports.default = new handler_1.SlashCommand({
         .setRequired(true)
         .addChoices({ name: '😌 Easy (4 pairs)', value: 'easy' }, { name: '😰 Medium (6 pairs)', value: 'medium' }, { name: '😱 Hard (8 pairs)', value: 'hard' })),
     async execute(interaction) {
-        await interaction.deferReply({ flags: [discord_js_1.MessageFlags.Ephemeral] });
-        const user = await user_status_1.User.findOne({ discordId: interaction.user.id });
-        if (!user) {
-            await interaction.editReply('You need to register first! Use `/register` to begin your journey.');
-            return;
-        }
-        const suspicous = user.suspiciousLevel > 50;
-        if (suspicous) {
-            await interaction.editReply('You are too suspicious to play this game. Try again later.');
-            return;
-        }
-        const merit = user.meritPoints;
-        if (merit < 100) {
-            await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
-            return;
-        }
-        user.survivalDays += 1;
-        await user.save();
-        if (user.isInIsolation || user.suspiciousLevel >= 80) {
-            const embed = new discord_js_1.EmbedBuilder()
-                .setColor(GAME_CONSTANTS_1.PRISON_COLORS.danger)
-                .setTitle('⚠️ Access Denied')
-                .setDescription(user.isInIsolation
-                ? 'You are currently in isolation. Access to trials is restricted.'
-                : 'Your suspicious behavior has been noted. Access temporarily restricted.')
-                .setFooter({ text: 'Try again when your status improves' });
-            await interaction.editReply({ embeds: [embed] });
-            return;
-        }
-        const difficulty = interaction.options.getString('difficulty', true);
-        const game = createGame(difficulty);
-        const memoryGifAttachment = await getMemoryAttachment();
-        const embed = createBoardEmbed(game, user, difficulty);
-        if (memoryGifAttachment) {
-            embed.setImage('attachment://Memory.gif');
-        }
-        const components = createGameButtons(game, user);
-        const message = await interaction.editReply({
-            embeds: [embed],
-            ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
-            components: components
-        });
-        const collector = message.createMessageComponentCollector({
-            componentType: discord_js_1.ComponentType.Button,
-            time: 180000
-        });
-        collector.on('collect', async (btnInteraction) => {
-            if (btnInteraction.user.id !== interaction.user.id) {
-                await btnInteraction.reply({
-                    content: 'These symbols aren\'t meant for you...',
-                    flags: [discord_js_1.MessageFlags.Ephemeral]
-                });
+        try {
+            await interaction.deferReply({ flags: [discord_js_1.MessageFlags.Ephemeral] });
+            const user = await user_status_1.User.findOne({ discordId: interaction.user.id });
+            if (!user) {
+                await interaction.editReply('You need to register first! Use `/register` to begin your journey.');
                 return;
             }
-            try {
-                const cardId = parseInt(btnInteraction.customId.split('_')[1]);
-                const card = game.cards.find(c => c.id === cardId);
-                if (!card || card.isMatched || card.isFlipped || game.processingMatch) {
-                    await btnInteraction.deferUpdate();
-                    return;
-                }
-                card.isFlipped = true;
-                if (!game.firstCard) {
-                    game.firstCard = card;
-                    await btnInteraction.update({
-                        embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
-                        components: createGameButtons(game, user)
-                    });
-                }
-                else {
-                    game.secondCard = card;
-                    game.moves++;
-                    game.processingMatch = true;
-                    await btnInteraction.update({
-                        embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
-                        components: createGameButtons(game, user)
-                    });
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    if (game.firstCard.emoji === game.secondCard.emoji) {
-                        game.firstCard.isMatched = true;
-                        game.secondCard.isMatched = true;
-                        game.matches++;
-                    }
-                    else {
-                        game.firstCard.isFlipped = false;
-                        game.secondCard.isFlipped = false;
-                    }
-                    game.firstCard = null;
-                    game.secondCard = null;
-                    const isGameOver = game.matches === game.cards.length / 2 || game.moves >= game.maxMoves;
-                    const isSuccess = game.matches === game.cards.length / 2;
-                    if (isGameOver) {
-                        collector.stop();
-                        const baseReward = GAME_CONSTANTS_1.PUZZLE_REWARDS[difficulty];
-                        const performanceRatio = game.matches / (game.cards.length / 2);
-                        const meritChange = isSuccess
-                            ? Math.round(baseReward.success.meritPoints * (1 + performanceRatio / 2))
-                            : baseReward.failure.meritPoints;
-                        const sanityChange = isSuccess
-                            ? baseReward.success.sanity
-                            : Math.round(baseReward.failure.sanity * (1 - performanceRatio));
-                        let suspicionChange = 0;
-                        if (game.moves < game.matches * 2) {
-                            suspicionChange = Math.min(15, 10);
-                        }
-                        await Promise.all([
-                            user_services_1.UserService.updateUserStats(interaction.user.id, {
-                                meritPoints: user.meritPoints + meritChange,
-                                sanity: Math.min(Math.max(user.sanity + sanityChange, 0), 100),
-                                suspiciousLevel: Math.min(user.suspiciousLevel + suspicionChange, 100),
-                                totalGamesPlayed: user.totalGamesPlayed + 1,
-                                totalGamesWon: user.totalGamesWon + (isSuccess ? 1 : 0),
-                                currentStreak: isSuccess ? user.currentStreak + 1 : 0
-                            }),
-                            user_services_1.UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', isSuccess)
-                        ]);
-                        const memoryGifAttachment = await getMemoryAttachment();
-                        const resultEmbed = new discord_js_1.EmbedBuilder()
-                            .setColor(isSuccess ? GAME_CONSTANTS_1.PRISON_COLORS.success : GAME_CONSTANTS_1.PRISON_COLORS.danger)
-                            .setTitle(isSuccess ? '🌟 Memory Protocol Complete!' : '💫 Protocol Failed')
-                            .setDescription(`${isSuccess
-                            ? 'Your mind proves sharp as steel!'
-                            : 'The symbols fade into darkness...'}\n\n` +
-                            `Matches: ${game.matches}/${game.cards.length / 2}\n` +
-                            `Moves Used: ${game.moves}/${game.maxMoves}`)
-                            .addFields({
-                            name: '📊 Results',
-                            value: `Merit Points: ${meritChange >= 0 ? '+' : ''}${meritChange}\n` +
-                                `Sanity: ${sanityChange >= 0 ? '+' : ''}${sanityChange}\n` +
-                                `Streak: ${isSuccess ? user.currentStreak + 1 : '0'}` +
-                                (suspicionChange > 0 ? `\n⚠️ Suspicion: +${suspicionChange}` : '')
-                        })
-                            .setFooter({
-                            text: user.sanity < 30
-                                ? 'T̷h̷e̶ ̷s̶y̵m̷b̴o̷l̶s̷ ̵h̷a̵u̷n̷t̵ ̷y̶o̵u̷.̶.̶.'
-                                : isSuccess ? 'Your memory grows stronger...' : 'The patterns slip away...'
-                        });
-                        if (memoryGifAttachment) {
-                            resultEmbed.setImage('attachment://Memory.gif');
-                        }
-                        await interaction.editReply({
-                            embeds: [resultEmbed],
-                            ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
-                            components: []
-                        });
-                    }
-                    else {
-                        game.processingMatch = false;
-                        const memoryGifAttachment = await getMemoryAttachment();
-                        await interaction.editReply({
-                            embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
-                            ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
-                            components: createGameButtons(game, user)
-                        });
-                    }
-                }
+            const suspicous = user.suspiciousLevel > 50;
+            if (suspicous) {
+                await interaction.editReply('You are too suspicious to play this game. Try again later.');
+                return;
             }
-            catch (error) {
-                console.error('Error handling button interaction:', error);
-                try {
-                    await btnInteraction.deferUpdate();
-                }
-                catch (e) {
-                }
+            const merit = user.meritPoints;
+            if (merit < 200) {
+                await interaction.editReply('You dont have enough merit points to play this. You can play the previous game to earn more points');
+                return;
             }
-        });
-        collector.on('end', async (collected, reason) => {
-            if (reason === 'time') {
-                const memoryGifAttachment = await getMemoryAttachment();
-                const timeoutEmbed = new discord_js_1.EmbedBuilder()
-                    .setColor(GAME_CONSTANTS_1.PRISON_COLORS.warning)
-                    .setTitle('⏰ Time\'s Up!')
-                    .setDescription(user.sanity < 40
-                    ? 'T̵i̸m̵e̵ ̸d̵i̷s̷s̴o̵l̶v̷e̷s̴ ̶i̵n̷t̵o̷ ̵s̶h̴a̵d̷o̵w̴s̶.̷.̶.'
-                    : 'The symbols fade into the void...\nPerhaps speed is as important as memory.')
-                    .setImage('attachment://Memory.gif')
-                    .setFooter({ text: 'Try another round with /matching' });
-                if (memoryGifAttachment) {
-                    embed.setImage('attachment://Memory.gif');
-                }
+            user.survivalDays += 1;
+            await user.save();
+            if (user.isInIsolation || user.suspiciousLevel >= 80) {
+                const embed = new discord_js_1.EmbedBuilder()
+                    .setColor(GAME_CONSTANTS_1.PRISON_COLORS.danger)
+                    .setTitle('⚠️ Access Denied')
+                    .setDescription(user.isInIsolation
+                    ? 'You are currently in isolation. Access to trials is restricted.'
+                    : 'Your suspicious behavior has been noted. Access temporarily restricted.')
+                    .setFooter({ text: 'Try again when your status improves' });
+                await interaction.editReply({ embeds: [embed] });
+                return;
+            }
+            const difficulty = interaction.options.getString('difficulty', true);
+            const game = createGame(difficulty);
+            const memoryGifAttachment = await getMemoryAttachment();
+            const embed = createBoardEmbed(game, user, difficulty);
+            if (memoryGifAttachment) {
+                embed.setImage('attachment://Memory.gif');
+            }
+            const components = createGameButtons(game, user);
+            const message = await interaction.editReply({
+                embeds: [embed],
+                ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
+                components: components
+            });
+            const collector = message.createMessageComponentCollector({
+                componentType: discord_js_1.ComponentType.Button,
+                time: 180000,
+                dispose: true
+            });
+            let timeoutWarningTimeout;
+            const resetTimeoutWarning = () => {
+                clearTimeout(timeoutWarningTimeout);
+                timeoutWarningTimeout = setTimeout(async () => {
+                    if (!game.processingMatch && interaction.replied) {
+                        game.timeoutWarnings++;
+                        const warningEmbed = new discord_js_1.EmbedBuilder()
+                            .setColor(GAME_CONSTANTS_1.PRISON_COLORS.warning)
+                            .setTitle('⚠️ Inactivity Detected')
+                            .setDescription(user.sanity < 40 ?
+                            GAME_CONSTANTS_1.SANITY_EFFECTS.hallucinations.messages[Math.floor(Math.random() * GAME_CONSTANTS_1.SANITY_EFFECTS.hallucinations.messages.length)] :
+                            'The system grows impatient...');
+                        try {
+                            await interaction.followUp({
+                                embeds: [warningEmbed],
+                                ephemeral: true
+                            });
+                            if (game.timeoutWarnings >= 2) {
+                                await user_services_1.UserService.updateUserStats(interaction.user.id, {
+                                    suspiciousLevel: Math.min(user.suspiciousLevel + 5, 100)
+                                });
+                            }
+                        }
+                        catch (error) {
+                            console.error('Error sending timeout warning:', error);
+                        }
+                    }
+                }, 30000);
+            };
+            resetTimeoutWarning();
+            collector.on('collect', async (btnInteraction) => {
                 try {
-                    await interaction.editReply({
-                        embeds: [timeoutEmbed],
-                        ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
-                        components: []
-                    });
+                    resetTimeoutWarning();
+                    if (btnInteraction.user.id !== interaction.user.id) {
+                        await btnInteraction.reply({
+                            content: 'These symbols aren\'t meant for you...',
+                            flags: [discord_js_1.MessageFlags.Ephemeral]
+                        });
+                        return;
+                    }
+                    try {
+                        const cardId = parseInt(btnInteraction.customId.split('_')[1]);
+                        const card = game.cards.find(c => c.id === cardId);
+                        if (!card || card.isMatched || card.isFlipped || game.processingMatch) {
+                            await btnInteraction.deferUpdate();
+                            return;
+                        }
+                        card.isFlipped = true;
+                        if (!game.firstCard) {
+                            game.firstCard = card;
+                            await btnInteraction.update({
+                                embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
+                                components: createGameButtons(game, user)
+                            });
+                        }
+                        else {
+                            game.secondCard = card;
+                            game.moves++;
+                            game.processingMatch = true;
+                            await btnInteraction.update({
+                                embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
+                                components: createGameButtons(game, user)
+                            });
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            if (game.firstCard.emoji === game.secondCard.emoji) {
+                                game.firstCard.isMatched = true;
+                                game.secondCard.isMatched = true;
+                                game.matches++;
+                            }
+                            else {
+                                game.firstCard.isFlipped = false;
+                                game.secondCard.isFlipped = false;
+                            }
+                            game.firstCard = null;
+                            game.secondCard = null;
+                            const isGameOver = game.matches === game.cards.length / 2 || game.moves >= game.maxMoves;
+                            const isSuccess = game.matches === game.cards.length / 2;
+                            if (isGameOver) {
+                                collector.stop();
+                                const baseReward = GAME_CONSTANTS_1.PUZZLE_REWARDS[difficulty];
+                                const performanceRatio = game.matches / (game.cards.length / 2);
+                                const meritChange = isSuccess
+                                    ? Math.round(baseReward.success.meritPoints * (1 + performanceRatio / 2))
+                                    : baseReward.failure.meritPoints;
+                                const sanityChange = isSuccess
+                                    ? baseReward.success.sanity
+                                    : Math.round(baseReward.failure.sanity * (1 - performanceRatio));
+                                let suspicionChange = 0;
+                                if (game.moves < game.matches * 2) {
+                                    suspicionChange = Math.min(15, 10);
+                                }
+                                await Promise.all([
+                                    user_services_1.UserService.updateUserStats(interaction.user.id, {
+                                        meritPoints: user.meritPoints + meritChange,
+                                        sanity: Math.min(Math.max(user.sanity + sanityChange, 0), 100),
+                                        suspiciousLevel: Math.min(user.suspiciousLevel + suspicionChange, 100),
+                                        totalGamesPlayed: user.totalGamesPlayed + 1,
+                                        totalGamesWon: user.totalGamesWon + (isSuccess ? 1 : 0),
+                                        currentStreak: isSuccess ? user.currentStreak + 1 : 0
+                                    }),
+                                    user_services_1.UserService.updatePuzzleProgress(interaction.user.id, 'matchingpairs', isSuccess)
+                                ]);
+                                const memoryGifAttachment = await getMemoryAttachment();
+                                const resultEmbed = new discord_js_1.EmbedBuilder()
+                                    .setColor(isSuccess ? GAME_CONSTANTS_1.PRISON_COLORS.success : GAME_CONSTANTS_1.PRISON_COLORS.danger)
+                                    .setTitle(isSuccess ? '🌟 Memory Protocol Complete!' : '💫 Protocol Failed')
+                                    .setDescription(`${isSuccess
+                                    ? 'Your mind proves sharp as steel!'
+                                    : 'The symbols fade into darkness...'}\n\n` +
+                                    `Matches: ${game.matches}/${game.cards.length / 2}\n` +
+                                    `Moves Used: ${game.moves}/${game.maxMoves}`)
+                                    .addFields({
+                                    name: '📊 Results',
+                                    value: `Merit Points: ${meritChange >= 0 ? '+' : ''}${meritChange}\n` +
+                                        `Sanity: ${sanityChange >= 0 ? '+' : ''}${sanityChange}\n` +
+                                        `Streak: ${isSuccess ? user.currentStreak + 1 : '0'}` +
+                                        (suspicionChange > 0 ? `\n⚠️ Suspicion: +${suspicionChange}` : '')
+                                })
+                                    .setFooter({
+                                    text: user.sanity < 30
+                                        ? 'T̷h̷e̶ ̷s̶y̵m̷b̴o̷l̶s̷ ̵h̷a̵u̷n̷t̵ ̷y̶o̵u̷.̶.̶.'
+                                        : isSuccess ? 'Your memory grows stronger...' : 'The patterns slip away...'
+                                });
+                                if (memoryGifAttachment) {
+                                    resultEmbed.setImage('attachment://Memory.gif');
+                                }
+                                await interaction.editReply({
+                                    embeds: [resultEmbed],
+                                    ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
+                                    components: []
+                                });
+                            }
+                            else {
+                                game.processingMatch = false;
+                                const memoryGifAttachment = await getMemoryAttachment();
+                                await interaction.editReply({
+                                    embeds: [createBoardEmbed(game, user, difficulty).setImage('attachment://Memory.gif')],
+                                    ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
+                                    components: createGameButtons(game, user)
+                                });
+                            }
+                        }
+                    }
+                    catch (error) {
+                        console.error('Error handling button interaction:', error);
+                        try {
+                            await btnInteraction.deferUpdate();
+                        }
+                        catch (e) {
+                        }
+                    }
+                    applySanityEffects(game, user);
+                    if (user.sanity < 40 && Math.random() < 0.3) {
+                        const hallucination = GAME_CONSTANTS_1.SANITY_EFFECTS.hallucinations.messages[Math.floor(Math.random() * GAME_CONSTANTS_1.SANITY_EFFECTS.hallucinations.messages.length)];
+                        await interaction.followUp({
+                            content: GAME_CONSTANTS_1.SANITY_EFFECTS.hallucinations.distortCards(hallucination, user.sanity),
+                            ephemeral: true
+                        });
+                    }
                 }
                 catch (error) {
-                    console.error('Error updating timeout message:', error);
+                    await (0, GAME_CONSTANTS_1.handleInteractionError)(error, btnInteraction);
                 }
-                await user_services_1.UserService.updateUserStats(interaction.user.id, {
-                    sanity: Math.max(user.sanity - 2, 0),
-                    currentStreak: 0
-                });
-            }
-        });
+            });
+            collector.on('end', async (collected, reason) => {
+                try {
+                    clearTimeout(timeoutWarningTimeout);
+                    if (reason === 'time') {
+                        const sanityLoss = Math.min(10 + game.timeoutWarnings * 2, 20);
+                        const suspicionGain = Math.min(10 + game.timeoutWarnings * 3, 25);
+                        await user_services_1.UserService.updateUserStats(interaction.user.id, {
+                            sanity: Math.max(user.sanity - sanityLoss, 0),
+                            suspiciousLevel: Math.min(user.suspiciousLevel + suspicionGain, 100),
+                            currentStreak: 0
+                        });
+                        const memoryGifAttachment = await getMemoryAttachment();
+                        const timeoutEmbed = new discord_js_1.EmbedBuilder()
+                            .setColor(GAME_CONSTANTS_1.PRISON_COLORS.warning)
+                            .setTitle('⏰ Time\'s Up!')
+                            .setDescription(user.sanity < 40
+                            ? 'T̵i̸m̵e̵ ̸d̵i̷s̷s̴o̵l̶v̷e̷s̴ ̶i̵n̷t̵o̷ ̵s̶h̴a̵d̷o̵w̴s̶.̷.̶.'
+                            : 'The symbols fade into the void...\nPerhaps speed is as important as memory.')
+                            .setImage('attachment://Memory.gif')
+                            .setFooter({ text: 'Try another round with /matching' });
+                        if (memoryGifAttachment) {
+                            embed.setImage('attachment://Memory.gif');
+                        }
+                        try {
+                            await interaction.editReply({
+                                embeds: [timeoutEmbed],
+                                ...(memoryGifAttachment ? { files: [memoryGifAttachment] } : {}),
+                                components: []
+                            });
+                        }
+                        catch (error) {
+                            console.error('Error updating timeout message:', error);
+                        }
+                    }
+                }
+                catch (error) {
+                    await (0, GAME_CONSTANTS_1.handleInteractionError)(error, interaction);
+                }
+            });
+        }
+        catch (error) {
+            await (0, GAME_CONSTANTS_1.handleInteractionError)(error, interaction);
+        }
     }
 });
 function getRandomGlitchMessage() {
@@ -308,5 +371,21 @@ function getRandomGlitchMessage() {
 }
 function getColorFromPrisonColor(colorKey) {
     return GAME_CONSTANTS_1.PRISON_COLORS[colorKey];
+}
+function applySanityEffects(game, user) {
+    if (user.sanity > 70)
+        return;
+    if (user.sanity < 30 && Math.random() < 0.15) {
+        const idx1 = Math.floor(Math.random() * game.cards.length);
+        const idx2 = Math.floor(Math.random() * game.cards.length);
+        [game.cards[idx1], game.cards[idx2]] = [game.cards[idx2], game.cards[idx1]];
+    }
+    if (user.sanity < 50) {
+        game.cards.forEach(card => {
+            if (!card.isFlipped && Math.random() < 0.2) {
+                card.temporaryEmoji = CARD_EMOJIS[Math.floor(Math.random() * CARD_EMOJIS.length)];
+            }
+        });
+    }
 }
 //# sourceMappingURL=matchingpairs.js.map

@@ -21,7 +21,7 @@ async function getWelcomeAttachment() {
     }
 }
 exports.default = new handler_1.SlashCommand({
-    registerType: handler_1.RegisterType.Guild,
+    registerType: handler_1.RegisterType.Global,
     data: new discord_js_1.SlashCommandBuilder()
         .setName('register')
         .setDescription('Register as an inmate in the Infinite Prison')

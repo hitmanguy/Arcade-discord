@@ -16,7 +16,7 @@ import {
 import { Device} from '../../../model/Device_schema';
 import { User } from '../../../model/user_status';
 export default new SlashCommand({
-    registerType: RegisterType.Guild,
+    registerType: RegisterType.Global,
     data: new SlashCommandBuilder()
         .setName('restart')
         .setDescription('restart your progress and reset your device'),

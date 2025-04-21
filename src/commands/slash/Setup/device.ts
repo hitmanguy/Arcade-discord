@@ -49,7 +49,7 @@ function getLastBotMessageContent(messages: any): string | null {
 }
 
 export default new SlashCommand({
-  registerType: RegisterType.Guild,
+  registerType: RegisterType.Global,
 
   data: new SlashCommandBuilder()
     .setName('device')
@@ -70,7 +70,6 @@ export default new SlashCommand({
 
     const deviceGifAttachment = await getDeviceAttachment();
 
-    // 1. Show contact selection menu
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('device:select_contact')
       .setPlaceholder('Select a contact to message...')
@@ -119,7 +118,6 @@ export default new SlashCommand({
     const selectedContact = CONTACTS.find(c => c.id === selectInteraction.values[0]);
     if (!selectedContact) return;
 
-    // 3. Enter chat mode
     const chatEmbed = new EmbedBuilder()
       .setColor('#232946')
       .setTitle("💬 Chatting with ${selectedContact.emoji} ${selectedContact.name}")
@@ -172,7 +170,6 @@ export default new SlashCommand({
       embeds: [chatEmbed],
       components: [endChatButton]
     });
-    // 4. Collect messages from user
     const filter = (m: any) => m.author.id === interaction.user.id;
     const collector = interaction.channel
       ? new MessageCollector(interaction.channel, { filter, time: 60000 })
@@ -214,7 +211,6 @@ export default new SlashCommand({
       // });
     });
 
-    // 5. End chat on button press
     const buttonCollector = interaction.channel?.createMessageComponentCollector({
       componentType: ComponentType.Button,
       filter: i => i.user.id === interaction.user.id && i.customId === 'device:end_chat',

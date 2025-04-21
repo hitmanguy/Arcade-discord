@@ -12,8 +12,8 @@ import {
 } from 'discord.js';
 import { RegisterType, SlashCommand } from '../../../handler';
 import { join } from 'path';
-import { User } from '../../../model/user_status';
-import { PRISON_COLORS } from '../../../constants/GAME_CONSTANTS';
+import { User, UserDocument } from '../../../model/user_status';
+import { PRISON_COLORS, SANITY_EFFECTS } from '../../../constants/GAME_CONSTANTS';
 import { UserService } from '../../../services/user_services';
 import { promises as fs } from 'fs';
 
@@ -56,15 +56,39 @@ function createTimeoutEmbed(sanityLoss: number, suspicionGain: number) {
 }
 
 const level1Puzzles = [
-  // Riddles
   {
     type: 'riddle',
-    question: "What has hands but cannot clap?",
-    options: ['Clock', 'Monkey', 'Glove', 'Chair'],
-    answer: 'Clock',
-    flavor: '🕰️ *The steady ticking echoes through your cell...*',
-    reward: 12,
-    sanityImpact: { success: 5, failure: -3 }
+    question: "I speak without a mouth and hear without ears. I have no body, but come alive with wind. What am I?",
+    options: ['Echo', 'Shadow', 'Ghost', 'Thought'],
+    answer: 'Echo',
+    flavor: '🎭 *Whispers echo through the empty corridors...*',
+    reward: 8,
+    sanityImpact: { success: 2, failure: -5 }
+  },
+  {
+    type: 'riddle',
+    question: "The more you take, the more you leave behind. What am I?",
+    options: ['Memories', 'Footsteps', 'Time', 'Shadows'],
+    answer: 'Footsteps',
+    flavor: '👣 *Your steps fade into darkness...*',
+    reward: 10,
+    sanityImpact: { success: 3, failure: -6 }
+  },
+  {
+    type: 'math',
+    question: "If 3 prisoners can dig 3 tunnels in 3 days, how many days will it take 6 prisoners to dig 6 tunnels?",
+    options: ['3 days', '6 days', '9 days', '12 days'],
+    answer: '3 days',
+    reward: 15,
+    sanityImpact: { success: 4, failure: -8 }
+  },
+  {
+    type: 'logic',
+    question: "In a prison with 100 cells, if guard A lies on Monday, Wednesday, Friday and guard B lies on Tuesday, Thursday, Saturday, which guard is telling the truth on Sunday?",
+    options: ['Guard A', 'Guard B', 'Both lie', 'Both tell truth'],
+    answer: 'Both tell truth',
+    reward: 20,
+    sanityImpact: { success: 5, failure: -10 }
   },
   {
     id: 'riddle_footsteps',
@@ -195,7 +219,6 @@ const level1Puzzles = [
   },
 ];
 
-// Track user progress temporarily (replace with database logic in production)
 const userProgressMap = new Map<string, {
   index: number,
   puzzles: typeof level1Puzzles,
@@ -211,7 +234,7 @@ function getRandomPuzzles(n: number) {
 }
 
 export default new SlashCommand({
-  registerType: RegisterType.Guild,
+  registerType: RegisterType.Global,
 
   data: new SlashCommandBuilder()
     .setName('puzzle')
@@ -250,37 +273,106 @@ export default new SlashCommand({
   },
 });
 
+function getDistortedText(text: string, sanity: number): string {
+  if (sanity > 70) return text;
+  
+  const intensity = (100 - sanity) / 100;
+  if (sanity < 30) {
+    // Severe distortions
+    return text.split('').map(char => {
+      if (Math.random() < intensity * 0.4) {
+        return ['̷', '̶', '̸', '̵', '̴'][Math.floor(Math.random() * 5)] + char;
+      }
+      if (Math.random() < intensity * 0.3) {
+        return ['⌀', '∆', '◊', '▣', '▥'][Math.floor(Math.random() * 5)];
+      }
+      return char;
+    }).join('');
+  }
+  
+  return SANITY_EFFECTS.hallucinations.distortCards(text, sanity);
+}
+
+function createTimeDistortedEmbed(sanityLoss: number, suspicionGain: number, user: UserDocument): EmbedBuilder {
+  const baseMessage = '⏰ Time\'s Up!';
+  const consequence = 'The silence weighs heavily on your mind...';
+  
+  return new EmbedBuilder()
+    .setColor(user.sanity < 30 ? PRISON_COLORS.danger : PRISON_COLORS.warning)
+    .setTitle(user.sanity < 40 ? getDistortedText(baseMessage, user.sanity) : baseMessage)
+    .setDescription(
+      '```diff\n' +
+      `- ${user.sanity < 40 ? getDistortedText(consequence, user.sanity) : consequence}\n` +
+      '```'
+    )
+    .addFields(
+      { 
+        name: user.sanity < 30 ? '💀 P̷u̴n̵i̸s̷h̵m̶e̸n̷t̸' : '😰 Consequences', 
+        value: `• Sanity: ${sanityLoss < 0 ? '' : '-'}${sanityLoss}\n• Suspicion: +${suspicionGain}`,
+        inline: true 
+      }
+    )
+    .setFooter({ 
+      text: user.sanity < 40 
+        ? 'T̸h̵e̷ ̵w̶a̸l̵l̷s̸ ̵h̶a̵v̷e̶ ̷e̵y̸e̵s̷.̶.̸.'
+        : 'The guards note your hesitation...'
+    });
+}
+
 async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: string) {
   const session = userProgressMap.get(userId);
   if (!session) return;
 
+  const user = await User.findOne({ discordId: userId });
+  if (!user) return;
+
   const current = session.puzzles[session.index];
+  
+  const distortedOptions = current.options.map(opt => 
+    user.sanity < 50 ? getDistortedText(opt, user.sanity) : opt
+  );
+
+  if (user.sanity < 30 && Math.random() < 0.3) {
+    const idx1 = Math.floor(Math.random() * distortedOptions.length);
+    const idx2 = Math.floor(Math.random() * distortedOptions.length);
+    [distortedOptions[idx1], distortedOptions[idx2]] = [distortedOptions[idx2], distortedOptions[idx1]];
+  }
+
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    current.options.map((opt, index) =>
+    distortedOptions.map((opt, index) =>
       new ButtonBuilder()
-        .setCustomId(`puzzle:answer:${opt}:${Date.now()}:${index}`) // Add unique identifiers
+        .setCustomId(`puzzle:answer:${opt}:${Date.now()}:${index}`)
         .setLabel(opt)
         .setStyle(ButtonStyle.Primary)
     )
   );
-  // Create the attachment for the puzzle GIF from local file
+
   const puzzleGifAttachment = await getPuzzleAttachment();
 
-  // Create embed with puzzle information and GIF
   const puzzleEmbed = new EmbedBuilder()
-    .setColor('#0099ff')
+    .setColor(user.sanity < 30 ? PRISON_COLORS.danger : '#0099ff')
     .setTitle(`🧠 ${current.type.toUpperCase()} PUZZLE`)
-    .setDescription(current.question)
-    .setFooter({ text: `Puzzle ${session.index + 1}/5` });
+    .setDescription(
+      `${user.sanity < 40 ? getDistortedText('🧩 Solve the puzzle:', user.sanity) : '🧩 Solve the puzzle:'}\n\n` +
+      `${getDistortedText(current.question, user.sanity)}`
+    )
+    .setFooter({ 
+      text: user.sanity < 40 
+        ? 'T̷i̸m̵e̷ ̶i̸s̷ ̸a̵n̷ ̶i̸l̵l̷u̵s̸i̷o̸n̶.̷.̸.'
+        : `Puzzle ${session.index + 1}/5` 
+    });
 
   if (puzzleGifAttachment) {
     puzzleEmbed.setImage('attachment://puzzle.gif');
   }
+
   if (current.flavor) {
-    puzzleEmbed.addFields({ name: '\u200B', value: current.flavor });
+    puzzleEmbed.addFields({ 
+      name: '\u200B', 
+      value: getDistortedText(current.flavor, user.sanity) 
+    });
   }
 
-  
   const message = await interaction.editReply({
     embeds: [puzzleEmbed],
     ...(puzzleGifAttachment ? { files: [puzzleGifAttachment] } : {}),
@@ -318,7 +410,6 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
       session.suspicion += 5;
     }
 
-    // Create result embed
     const resultEmbed = new EmbedBuilder()
       .setColor(isCorrect ? '#00ff00' : '#ff0000')
       .setTitle(isCorrect ? '✅ CORRECT!' : '❌ INCORRECT!')
@@ -334,7 +425,6 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
 
     session.index += 1;
 
-    // Wait a moment, then show next or final screen
     setTimeout(async () => {
       if (session.index < 5) {
         await sendPuzzle(interaction, userId);
@@ -345,7 +435,6 @@ async function sendPuzzle(interaction: ChatInputCommandInteraction, userId: stri
   });
   collector?.on('end', async (collected) => {
     if (!answered) {
-      // Apply penalty for timeout
       session.sanity -= 10;
       session.suspicion += 10;
 
@@ -501,7 +590,7 @@ async function showFinalOptions(interaction: ChatInputCommandInteraction, userId
   collector?.on('end', async () => {
     try {
       await interaction.editReply({
-        components: [] // Remove all components when collector ends
+        components: []
       });
     } catch (error) {
       console.error('Failed to remove components:', error);

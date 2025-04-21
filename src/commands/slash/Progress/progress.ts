@@ -41,7 +41,7 @@ function isStorylineData(data: any): data is StorylineData {
 }
 
 export default new SlashCommand({
-    registerType: RegisterType.Guild,
+    registerType: RegisterType.Global,
     data: new SlashCommandBuilder()
         .setName('progress')
         .setDescription('View your journey through the digital prison'),
@@ -65,7 +65,6 @@ export default new SlashCommand({
 
         let progressDescription = `${STORYLINE.intro}\n\n`;
 
-        // Calculate overall progress with custom styling
         const overallProgress = createProgressBar(completedCount, puzzleOrder.length, {
             length: 15,
             chars: { empty: '⬡', filled: '⬢' }
@@ -128,8 +127,6 @@ export default new SlashCommand({
                     ? '⚠️ WARNING: High suspicion level detected. Access may be restricted.'
                     : '🔒 Complete all trials to earn your freedom' 
             });
-
-        // Add warning if in isolation
         if (user.isInIsolation) {
             embed.addFields({
                 name: '⚠️ ISOLATION ACTIVE',

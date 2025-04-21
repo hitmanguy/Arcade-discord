@@ -6,7 +6,7 @@ const promises_1 = require("node:timers/promises");
 const user_services_1 = require("../../../services/user_services");
 const GAME_CONSTANTS_1 = require("../../../constants/GAME_CONSTANTS");
 exports.default = new handler_1.SlashCommand({
-    registerType: handler_1.RegisterType.Guild,
+    registerType: handler_1.RegisterType.Global,
     data: new discord_js_1.SlashCommandBuilder()
         .setName('profile')
         .setDescription('View and manage your Infinite Prison profile')

@@ -11,7 +11,7 @@ import {
 import { User } from '../../../model/user_status';
 
 export default new SlashCommand({
-  registerType: RegisterType.Guild,
+  registerType: RegisterType.Global,
 
   data: new SlashCommandBuilder()
     .setName('shop')

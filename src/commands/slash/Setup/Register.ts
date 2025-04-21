@@ -34,7 +34,7 @@ async function getWelcomeAttachment(): Promise<AttachmentBuilder | null> {
 }
 
 export default new SlashCommand({
-  registerType: RegisterType.Guild,
+  registerType: RegisterType.Global,
 
   data: new SlashCommandBuilder()
     .setName('register')
@@ -71,15 +71,12 @@ export default new SlashCommand({
       return;
     }
     
-    // Create loading animation
     const loadingEmbed = new EmbedBuilder()
       .setColor(PRISON_COLORS.primary as ColorResolvable)
       .setTitle('🔄 Processing New Inmate...')
       .setDescription('```\nScanning biometric data...\n```');
     
     await interaction.editReply({ embeds: [loadingEmbed] });
-    
-    // Simulate processing
     for (let i = 0; i < 3; i++) {
       await sleep(800);
       await interaction.editReply({
@@ -89,10 +86,7 @@ export default new SlashCommand({
       });
     }
     
-    // Get optional crime reason
     const crime = interaction.options.getString('crime') || "Unknown crimes against humanity";
-    
-    // Create new user with starter items
     const newUser = await UserService.createNewUser(userId, interaction.user.username);
     
     if (!newUser) {
@@ -100,16 +94,12 @@ export default new SlashCommand({
       return;
     }
     
-    // Add starter items to inventory
     for (const item of STARTER_ITEMS) {
       await UserService.addToInventory(userId, item.itemId, item.name, item.quantity);
     }
-    
-    // Create the attachment for the welcome GIF from local file
     const welcomeGifAttachment = await getWelcomeAttachment();
 
     
-    // Create welcome embed with GIF
     const welcomeEmbed = new EmbedBuilder()
       .setColor(PRISON_COLORS.danger as ColorResolvable)
       .setTitle(`🔒 WELCOME TO INFINITE PRISON - INMATE #${userId.slice(-6)}`)
@@ -132,7 +122,6 @@ export default new SlashCommand({
       )
       .setFooter({ text: `Incarceration Date: ${new Date().toLocaleDateString()}` });
     
-    // Create action buttons
     const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('register:tutorial')
@@ -155,11 +144,10 @@ export default new SlashCommand({
       components: [buttonRow]
     });
     
-    // Set up collector for button interactions
     const collector = interaction.channel?.createMessageComponentCollector({
       componentType: ComponentType.Button,
       filter: (i) => i.user.id === interaction.user.id && i.customId.startsWith('register:'),
-      time: 300000 // 5 minutes
+      time: 300000 
     });
 
     if (!collector) {
@@ -208,7 +196,6 @@ export default new SlashCommand({
     await sleep(60000);
 
     try {
-      // Use findOneAndUpdate instead of separate find and update operations
       const updatedDevice = await Device.findOneAndUpdate(
         { discordId: userId },
         {
@@ -223,9 +210,9 @@ export default new SlashCommand({
           }
         },
         {
-          upsert: true, // Create if doesn't exist
-          new: true, // Return the updated document
-          setDefaultsOnInsert: true // Apply schema defaults on insert
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true 
         }
       );
     
@@ -235,7 +222,7 @@ export default new SlashCommand({
     
     } catch (error) {
       console.error('Error managing device:', error);
-      throw error; // Re-throw to handle in calling function
+      throw error; 
     }
     
     const mysteriousEmbed = new EmbedBuilder()
@@ -256,7 +243,7 @@ async function createWelcomeEmbed(userId: string, crime: string, userAvatar: str
     .setColor(PRISON_COLORS.danger as ColorResolvable)
     .setTitle(`🔒 WELCOME TO INFINITE PRISON - INMATE #${userId.slice(-6)}`)
     .setDescription(`*"${crime}"*\n\nYour sentence begins today. There is no escape from the Infinite Prison.`)
-    .setImage('attachment://welcome.gif') // Reference the attachment
+    .setImage('attachment://welcome.gif')
     .setThumbnail(userAvatar)
     .addFields(
       { 
@@ -312,7 +299,6 @@ async function showTutorial(interaction: ButtonInteraction) {
       components: [backButton]
     });
     
-    // Set up collector for the back button
     const collector = interaction.channel?.createMessageComponentCollector({
       componentType: ComponentType.Button,
       filter: (i) => i.user.id === interaction.user.id && i.customId === 'tutorial:back',
@@ -336,7 +322,6 @@ async function showTutorial(interaction: ButtonInteraction) {
           interaction.user.displayAvatarURL()
         );
         
-        // Recreate the original welcome message buttons
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
             .setCustomId('register:tutorial')
@@ -375,7 +360,7 @@ async function showTutorial(interaction: ButtonInteraction) {
     });
   } catch (error) {
     console.error('Tutorial function error:', error);
-    throw error; // Re-throw for handling in collector
+    throw error; 
   }
 }
 
@@ -413,7 +398,6 @@ async function showActivities(interaction: ButtonInteraction) {
       components: [backButton]
     });
     
-    // Set up collector for the back button
     const collector = interaction.channel?.createMessageComponentCollector({
       componentType: ComponentType.Button,
       filter: (i) => i.user.id === interaction.user.id && i.customId === 'activities:back',
@@ -476,7 +460,7 @@ async function showActivities(interaction: ButtonInteraction) {
     });
   } catch (error) {
     console.error('Activities function error:', error);
-    throw error; // Re-throw for handling in collector
+    throw error; 
   }
 }
 

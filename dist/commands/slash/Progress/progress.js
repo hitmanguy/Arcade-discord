@@ -24,7 +24,7 @@ function isStorylineData(data) {
         'name' in data && 'description' in data && 'flavorText' in data;
 }
 exports.default = new handler_1.SlashCommand({
-    registerType: handler_1.RegisterType.Guild,
+    registerType: handler_1.RegisterType.Global,
     data: new discord_js_1.SlashCommandBuilder()
         .setName('progress')
         .setDescription('View your journey through the digital prison'),

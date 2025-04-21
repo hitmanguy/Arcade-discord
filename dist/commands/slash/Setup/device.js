@@ -29,7 +29,7 @@ function getLastBotMessageContent(messages) {
     return botMessages[botMessages.length - 1].content;
 }
 exports.default = new handler_1.SlashCommand({
-    registerType: handler_1.RegisterType.Guild,
+    registerType: handler_1.RegisterType.Global,
     data: new discord_js_1.SlashCommandBuilder()
         .setName('device')
         .setDescription('Access your mysterious prison device'),

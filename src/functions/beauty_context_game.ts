@@ -10,6 +10,7 @@ export interface KingsOfDiamondsPlayer {
     extraLives: number;
     teamMate?: string;  // ID of teammate in Phase 2
     combinedNumber?: number;  // Combined number for Phase 2
+    lastAction?: number; // Timestamp of last action to prevent rapid inputs
   }
   
   interface RoundResult {
@@ -25,10 +26,15 @@ export interface KingsOfDiamondsPlayer {
     private phase: number = 1;
     private eliminationScore: number = 0;
     private hasStarted: boolean = false;
+    private lastActionTime: { [key: string]: number } = {};
+    private actionCooldown: number = 2000; // 2 second cooldown between actions
     private ruleStack: string[] = [
       "If a player chooses 0, the player who chooses 100 wins the round.",
       "If a player exactly hits the rounded off Regal's number, the loser penalty is doubled.",
-      "If there are 2 people or more who choose the same number, the number they choose becomes invalid and the players who chose the same number will lose a point even if the number is closest to Regal's number."
+      "If there are 2 people or more who choose the same number, the number they choose becomes invalid and the players who chose the same number will lose a point even if the number is closest to Regal's number.",
+      "If the average of all numbers is prime, everyone loses 2 points except the player closest to the average.",
+      "If any player's number matches their current score, they lose 3 points.",
+      "If all numbers chosen are either even or odd, everyone loses 1 point."
     ];
     private activeRules: string[] = [];
   
@@ -104,15 +110,30 @@ export interface KingsOfDiamondsPlayer {
     }
   
     public selectNumber(playerId: string, number: number): boolean {
-      const player = this.players.find(p => p.id === playerId && !p.isEliminated);
-      
-      if (!player) {
+      try {
+        if (!this.validatePlayerAction(playerId)) {
+          return false;
+        }
+
+        const player = this.players.find(p => p.id === playerId && !p.isEliminated);
+        if (!player) return false;
+
+        // Apply sanity effects to number selection
+        if (player.sanity < 30) {
+          // 30% chance to modify the number at low sanity
+          if (Math.random() < 0.3) {
+            const variation = Math.floor(Math.random() * 20) - 10;
+            number = Math.max(0, Math.min(100, number + variation));
+          }
+        }
+
+        player.selectedNumber = number;
+        player.hasSelected = true;
+        return true;
+      } catch (error) {
+        console.error('Error in selectNumber:', error);
         return false;
       }
-  
-      player.selectedNumber = number;
-      player.hasSelected = true;
-      return true;
     }
   
     public allPlayersSelected(): boolean {
@@ -456,6 +477,26 @@ export interface KingsOfDiamondsPlayer {
       return this.phase;
     }
     public getRules(): string{
-      return this.activeRules[-1];
+      try {
+        return this.activeRules.length > 0 ? 
+            this.activeRules[this.activeRules.length - 1] : 
+            'No active rules.';
+    } catch (error) {
+        console.error('Error getting rules:', error);
+        return 'Error retrieving rules.';
+    }
+    }
+
+    // Error handling for player actions
+    private validatePlayerAction(playerId: string): boolean {
+      const now = Date.now();
+      const lastAction = this.lastActionTime[playerId] || 0;
+      
+      if (now - lastAction < this.actionCooldown) {
+          return false;
+      }
+      
+      this.lastActionTime[playerId] = now;
+      return true;
     }
   }
