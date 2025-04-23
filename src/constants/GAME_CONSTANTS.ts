@@ -59,7 +59,7 @@ export const STORYLINE = {
         description: "Navigate through a digital maze of patterns and sequences.",
         flavorText: "The deeper you go, the more the walls seem to shift and change...",
         slash: "Use ./tunnel to play",
-        access: "acquire 50 merits point to unlock",
+        access: "acquire 100 merits point to unlock",
         merit: 100
     },
     matchingpairs: {
@@ -67,7 +67,7 @@ export const STORYLINE = {
         description: "Match the patterns, but be quick - your mind plays tricks in this place.",
         flavorText: "The symbols dance before your eyes. Are they changing, or is it just your imagination?",
         slash: "Use ./matching to play",
-        access: "acquire 100 merits point to unlock",
+        access: "acquire 200 merits point to unlock",
         merit: 200
     },
     UNO: {
@@ -75,7 +75,7 @@ export const STORYLINE = {
         description: "A seemingly innocent card game that tests your strategic thinking.",
         flavorText: "Even a simple game of cards feels sinister in this place...",
         slash: "Use ./uno to play",
-        access: "acquire 150 merits point to unlock",
+        access: "acquire 300 merits point to unlock",
         merit: 300
     },
     "numbers-game-command": {
@@ -83,7 +83,7 @@ export const STORYLINE = {
         description: "Trust no one. Choose your numbers wisely. Betrayal lurks in every corner.",
         flavorText: "The true nature of this prison begins to reveal itself...",
         slash: "Use ./number-game create/join/rule to play",
-        access: "acquire 200 merits point to unlock",
+        access: "acquire 400 merits point to unlock",
         merit: 400
     }
 };
