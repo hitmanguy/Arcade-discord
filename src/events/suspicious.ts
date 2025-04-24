@@ -10,7 +10,7 @@ export default new Event({
         setInterval(async () => {
             try {
                 // Find all users with suspicion > 0
-                const users = await User.find({ suspiciousLevel: { $gt: 0 } });
+                const users = await User.find();
                 
                 // Decrease suspicion for each user
                 for (const user of users) {
