@@ -8,9 +8,9 @@ export interface KingsOfDiamondsPlayer {
     selectedNumber: number | null;
     isEliminated: boolean;
     extraLives: number;
-    teamMate?: string;  // ID of teammate in Phase 2
-    combinedNumber?: number;  // Combined number for Phase 2
-    lastAction?: number; // Timestamp of last action to prevent rapid inputs
+    teamMate?: string; 
+    combinedNumber?: number;  
+    lastAction?: number; 
   }
   
   interface RoundResult {
@@ -27,9 +27,8 @@ export interface KingsOfDiamondsPlayer {
     private eliminationScore: number = 0;
     private hasStarted: boolean = false;
     private lastActionTime: { [key: string]: number } = {};
-    private actionCooldown: number = 2000; // 2 second cooldown between actions
+    private actionCooldown: number = 2000; 
     private ruleStack: string[] = [
-      "If a player chooses 0, the player who chooses 100 wins the round.",
       "If a player exactly hits the rounded off Regal's number, the loser penalty is doubled.",
       "If there are 2 people or more who choose the same number, the number they choose becomes invalid and the players who chose the same number will lose a point even if the number is closest to Regal's number.",
       "If the average of all numbers is prime, everyone loses 2 points except the player closest to the average.",
@@ -49,7 +48,6 @@ export interface KingsOfDiamondsPlayer {
         return false;
       }
   
-      // Check if player already exists
       if (this.players.some(p => p.id === player.id)) {
         return false;
       }
@@ -62,7 +60,7 @@ export interface KingsOfDiamondsPlayer {
         hasSelected: false,
         selectedNumber: null,
         isEliminated: false,
-        extraLives: 1 // Initialize with 10 lives
+        extraLives: 1 
       });
   
       return true;
@@ -96,7 +94,6 @@ export interface KingsOfDiamondsPlayer {
     public startRound(): void {
       this.round++;
       
-      // Reset player selections
       this.players.forEach(player => {
         if (!player.isEliminated) {
           player.hasSelected = false;
@@ -118,9 +115,7 @@ export interface KingsOfDiamondsPlayer {
         const player = this.players.find(p => p.id === playerId && !p.isEliminated);
         if (!player) return false;
 
-        // Apply sanity effects to number selection
         if (player.sanity < 30) {
-          // 30% chance to modify the number at low sanity
           if (Math.random() < 0.3) {
             const variation = Math.floor(Math.random() * 20) - 10;
             number = Math.max(0, Math.min(100, number + variation));
@@ -152,7 +147,6 @@ export interface KingsOfDiamondsPlayer {
     public evaluateRound(): RoundResult | null {
       const activePlayers = this.getActivePlayers();
       
-      // Ensure all players have selected a number
       if (!this.allPlayersSelected()) {
         return null;
       }
@@ -168,17 +162,13 @@ export interface KingsOfDiamondsPlayer {
       let message = '';
       let winners: string[] = [];
   
-      // Try to apply special rules first
       const specialRuleApplied = this.applySpecialRules(choices, regalsNumber);
       
       if (!specialRuleApplied) {
-        // Apply default rules
-        // Case: All players chose the same number
         if (new Set(numbers).size !== numbers.length) {
           activePlayers.forEach(p => p.score--);
           message = 'some players chose the same number! Everyone loses a point.';
         } else {
-          // Find the player(s) closest to Regal's number
           let smallestDiff = Infinity;
           let closestPlayers: string[] = [];
   
@@ -192,13 +182,6 @@ export interface KingsOfDiamondsPlayer {
             }
           });
   
-          // Assign scores
-          activePlayers.forEach(player => {
-            if (!closestPlayers.includes(player.id)) {
-              player.score--;
-            }
-          });
-  
           const winnerNames = closestPlayers.map(id => {
             const player = this.players.find(p => p.id === id);
             return player ? player.name : "Unknown";
@@ -208,7 +191,6 @@ export interface KingsOfDiamondsPlayer {
           winners = closestPlayers;
         }
       } else {
-        // A special rule was applied, message is set inside the method
         message = this.lastRuleMessage;
         winners = this.lastRuleWinners;
       }
@@ -228,109 +210,102 @@ export interface KingsOfDiamondsPlayer {
     private lastRuleMessage: string = '';
     private lastRuleWinners: string[] = [];
   
-    private applySpecialRules(choices: { id: string; name: string; number: number }[], regalsNumber: number): boolean {
-      const activePlayers = this.getActivePlayers();
-      this.lastRuleMessage = '';
-      this.lastRuleWinners = [];
-  
-      // Apply active rules in reverse order (newest first)
-      for (let i = this.activeRules.length - 1; i >= 0; i--) {
-        const rule = this.activeRules[i];
-  
-        // Rule: If there are 2 people or more who choose the same number, that number becomes invalid
-        if (rule.includes("same number, the number they choose becomes invalid")) {
-          const numberFrequency: { [key: number]: string[] } = {};
-          
-          choices.forEach(choice => {
-            if (!numberFrequency[choice.number]) {
-              numberFrequency[choice.number] = [];
+   private applySpecialRules(choices: { id: string; name: string; number: number }[], regalsNumber: number): boolean {
+        this.lastRuleMessage = '';
+        this.lastRuleWinners = [];
+        const activePlayers = this.getActivePlayers();
+
+        const isPrime = (n: number): boolean => {
+            if (n < 2) return false;
+            for (let i = 2; i <= Math.sqrt(n); i++) {
+                if (n % i === 0) return false;
             }
-            numberFrequency[choice.number].push(choice.id);
-          });
-  
-          const duplicates = Object.entries(numberFrequency)
-            .filter(([_, ids]) => ids.length > 1)
-            .map(([number, ids]) => ({ number: parseInt(number), ids }));
-  
-          if (duplicates.length > 0) {
-            // Players who chose duplicate numbers lose a point
-            duplicates.forEach(dup => {
-              dup.ids.forEach(id => {
-                const player = this.players.find(p => p.id === id);
-                if (player) player.score--;
-              });
-            });
-  
-            const duplicateNumbers = duplicates.map(d => d.number).join(', ');
-            this.lastRuleMessage = `Players chose the same numbers (${duplicateNumbers})! Those who selected duplicate numbers lose a point.`;
-            
-            // Find winner among non-duplicate players
-            const nonDuplicatePlayers = choices.filter(choice => 
-              !duplicates.some(dup => dup.number === choice.number)
-            );
-  
-            if (nonDuplicatePlayers.length > 0) {
-              // Find player closest to Regal's number among non-duplicates
-              let smallestDiff = Infinity;
-              let winner = nonDuplicatePlayers[0];
-  
-              nonDuplicatePlayers.forEach(player => {
-                const diff = Math.abs(player.number - regalsNumber);
-                if (diff < smallestDiff) {
-                  smallestDiff = diff;
-                  winner = player;
+            return true;
+        };
+
+        for (let i = this.activeRules.length - 1; i >= 0; i--) {
+            const rule = this.activeRules[i];
+
+            if (rule.includes('same number')) {
+                const freq: Record<number, string[]> = {};
+                choices.forEach(c => { freq[c.number] = freq[c.number] || []; freq[c.number].push(c.id); });
+                const duplicates = Object.entries(freq)
+                    .filter(([, ids]) => ids.length > 1)
+                    .map(([num, ids]) => ({ num: +num, ids }));
+                if (duplicates.length) {
+                    duplicates.forEach(d => d.ids.forEach(id => this.players.find(p => p.id === id)!.score--));
+                    const invalids = duplicates.map(d => d.num).join(', ');
+                    this.lastRuleMessage = `Invalid numbers (${invalids}) chosen: those players lose 1 point.`;
+                    const validChoices = choices.filter(c => !duplicates.some(d => d.num === c.number));
+                    if (validChoices.length) {
+                        let best = validChoices[0]; let diff0 = Math.abs(best.number - regalsNumber);
+                        validChoices.forEach(c => { const d = Math.abs(c.number - regalsNumber); if (d < diff0) { best = c; diff0 = d; }});
+                        this.lastRuleWinners = [best.id];
+                        this.lastRuleMessage += ` ${best.name} wins with ${best.number}.`;
+                    }
+                    return true;
                 }
-              });
-  
-              this.lastRuleWinners = [winner.id];
-              this.lastRuleMessage += ` ${winner.name} wins with number ${winner.number}!`;
             }
-  
-            return true;
-          }
-        }
-  
-        // Rule: If a player exactly hits the Regal's number, loser penalty is doubled
-        if (rule.includes("exactly hits the rounded off Regal's number")) {
-          const exactMatch = choices.find(choice => 
-            Math.round(choice.number) === Math.round(regalsNumber)
-          );
-  
-          if (exactMatch) {
-            // Double penalty for losers
-            activePlayers.forEach(player => {
-              if (player.id !== exactMatch.id) {
-                player.score -= 2;
-              }
-            });
-  
-            this.lastRuleMessage = `${exactMatch.name} exactly hit the Regal's number! All other players lose 2 points.`;
-            this.lastRuleWinners = [exactMatch.id];
-            return true;
-          }
-        }
-  
-        // Rule: If someone chooses 0, the player who chooses 100 wins
-        if (rule.includes("chooses 0, the player who chooses 100 wins")) {
-          const hasZero = choices.some(choice => choice.number === 0);
-          const has100 = choices.find(choice => choice.number === 100);
-  
-          if (hasZero && has100) {
-            // Player who chose 0 loses a point
-            const zeroPlayer = choices.find(choice => choice.number === 0);
-            if (zeroPlayer) {
-              const player = this.players.find(p => p.id === zeroPlayer.id);
-              if (player) player.score--;
+
+            if (rule.includes('exactly hits')) {
+                const exact = choices.find(c => Math.round(c.number) === Math.round(regalsNumber));
+                if (exact) {
+                    activePlayers.forEach(p => { if (p.id !== exact.id) p.score -= 2; });
+                    this.lastRuleMessage = `${exact.name} hit it exactly! Others lose 2 points.`;
+                    this.lastRuleWinners = [exact.id];
+                    return true;
+                }
             }
-  
-            this.lastRuleMessage = `${has100.name} chose 100 and someone chose 0! 100 beats 0 - ${has100.name} wins the round!`;
-            this.lastRuleWinners = [has100.id];
-            return true;
-          }
+
+            if (rule.includes('chooses 0')) {
+                const zero = choices.find(c => c.number === 0);
+                const hundred = choices.find(c => c.number === 100);
+                if (zero && hundred) {
+                    this.players.find(p => p.id === zero.id)!.score--;
+                    this.lastRuleMessage = `${hundred.name} beats 0 with 100!`;
+                    this.lastRuleWinners = [hundred.id];
+                    return true;
+                }
+            }
+
+            if (rule.includes('average of all numbers is prime')) {
+                const avg = Math.round(numbers.reduce((a,c) => a + c, 0) / numbers.length);
+                if (isPrime(avg)) {
+                    let smallestDiff = Infinity;
+                    let closest: { id: string } | null = null;
+                    choices.forEach(c => {
+                        const d = Math.abs(c.number - avg);
+                        if (d < smallestDiff) { smallestDiff = d; closest = c; }
+                    });
+                    activePlayers.forEach(p => { if (p.id !== closest!.id) p.score -= 2; });
+                    this.lastRuleMessage = `Average ${avg} is prime: others lose 2 points.`;
+                    this.lastRuleWinners = [closest!.id];
+                    return true;
+                }
+            }
+
+            if (rule.includes('matches their current score')) {
+                const matched = choices.filter(c => this.players.find(p => p.id === c.id)!.score === c.number);
+                if (matched.length) {
+                    matched.forEach(m => this.players.find(p => p.id === m.id)!.score -= 3);
+                    const names = matched.map(m => m.name).join(', ');
+                    this.lastRuleMessage = `${names} matched their score: -3 points each.`;
+                    return true;
+                }
+            }
+
+            if (rule.includes('even or odd')) {
+                const allEven = choices.every(c => c.number % 2 === 0);
+                const allOdd = choices.every(c => c.number % 2 !== 0);
+                if (allEven || allOdd) {
+                    activePlayers.forEach(p => p.score--);
+                    this.lastRuleMessage = `All numbers were ${allEven ? 'even' : 'odd'}: everyone loses 1 point.`;
+                    return true;
+                }
+            }
         }
-      }
-  
-      return false;
+
+        return false;
     }
   
     public checkForEliminations(): KingsOfDiamondsPlayer[] {
@@ -353,10 +328,14 @@ export interface KingsOfDiamondsPlayer {
       if (this.ruleStack.length === 0) {
         return "No more rules to add.";
       }
-      
-      const newRule = this.ruleStack.pop() as string;
-      this.activeRules.push(newRule);
-      return newRule;
+      if(this.getActivePlayer().length==2){
+          this.activeRules.push("If a player chooses 0, the player who chooses 100 wins the round.");
+          return "If a player chooses 0, the player who chooses 100 wins the round.";
+      }else{
+          const newRule = this.ruleStack.pop() as string;
+          this.activeRules.push(newRule);
+          return newRule;  
+      }
     }
   
     public isGameOver(): boolean {
@@ -377,7 +356,7 @@ export interface KingsOfDiamondsPlayer {
       if (!target || target.extraLives <= 0) return false;
       
       target.score=target.score-2;
-      if (target.extraLives <= 0 && target.score <= this.eliminationScore) {
+      if (target.score <= this.eliminationScore) {
         target.isEliminated = true;
       }
       return true;
