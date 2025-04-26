@@ -193,7 +193,7 @@ export default new SlashCommand({
           dms = (await character).createDM();
           device.conversation_id = (await dms).chatId;
           await device.save();
-          response = (await dms).sendMessage("${msg.author.username}-${msg.content}");
+          response = (await dms).sendMessage(`${msg.author.username}-${msg.content}`);
         }else{
           dms = await (await character).DM(device.conversation_id);
           response = (await dms).sendMessage("${msg.author.username}-${msg.content}");
