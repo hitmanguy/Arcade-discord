@@ -269,7 +269,7 @@ export interface KingsOfDiamondsPlayer {
             }
 
             if (rule.includes('average of all numbers is prime')) {
-                const avg = Math.round(numbers.reduce((a,c) => a + c, 0) / numbers.length);
+                const avg = regalsNumber;
                 if (isPrime(avg)) {
                     let smallestDiff = Infinity;
                     let closest: { id: string } | null = null;
@@ -328,7 +328,7 @@ export interface KingsOfDiamondsPlayer {
       if (this.ruleStack.length === 0) {
         return "No more rules to add.";
       }
-      if(this.getActivePlayer().length==2){
+      if(this.getActivePlayers().length==2){
           this.activeRules.push("If a player chooses 0, the player who chooses 100 wins the round.");
           return "If a player chooses 0, the player who chooses 100 wins the round.";
       }else{
