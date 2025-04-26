@@ -712,18 +712,18 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
       .addComponents(
         new StringSelectMenuBuilder()
           .setCustomId('kod_life_target')
-          .setPlaceholder('Select a player to reduce their life')
+          .setPlaceholder('Select a player to reduce their score')
           .addOptions(
             players.map(p => ({
               label: p.name,
               value: p.id,
-              description: `Extra lives: ${p.extraLives}`
+              description: `Score: ${p.score}`
             }))
           )
       );
 
     await interaction.reply({
-      content: 'Select a player to reduce their extra life:',
+      content: 'Select a player to reduce their extra score:',
       components: [row],
       ephemeral: true
     });
@@ -744,19 +744,19 @@ async function showNumberSelectionModal(interaction: ButtonInteraction | Command
       if (success && target) {
         if (!i.replied && !i.deferred) {
           await i.update({
-            content: `Successfully reduced ${target.name}'s extra life! They now have ${target.extraLives} lives remaining.`,
+            content: `Successfully reduced ${target.name}'s score! They now have ${target.score} score remaining.`,
             components: []
           });
         } else {
           await i.followUp({
-            content: `Successfully reduced ${target.name}'s extra life! They now have ${target.extraLives} lives remaining.`,
+            content: `Successfully reduced ${target.name}'s extra life! They now have ${target.score} score remaining.`,
             components: [],
             ephemeral: true
           });
         }
       } else {
         await i.update({
-          content: 'Failed to reduce player\'s life. They might not have any extra lives left.',
+          content: 'Failed to reduce player\'s score. They might not have any extra scores left.',
           components: []
         });
       }
