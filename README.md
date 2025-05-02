@@ -1,4 +1,4 @@
-#  Infiniox: Prison Escape Puzzle Bot
+#  🤖Infiniox: Prison Escape Puzzle Bot
 
 Infiniox is an immersive **multiplayer puzzle and strategy Discord bot** set in a high-security prison. Players must solve brain-teasing challenges, maintain sanity, gain merit points, and avoid rising suspicion to escape. With modes like co-op, sabotage, and competitive gameplay, every decision has consequences—testing your logic, memory, and social strategy.
 
