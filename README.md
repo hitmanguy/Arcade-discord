@@ -8,15 +8,15 @@ Infiniox is an immersive **multiplayer puzzle and strategy Discord bot** set in 
 
 ## 🚀 Features
 
-- 🎮 **Multiplayer Game System**: Co-op, sabotage, and competitive puzzle-solving modes.
-- 🧩 **Puzzle Variety**: Riddles, trivia, memory, math, and logic games.
-- 📈 **Progression System**: Earn merit points to unlock increasingly difficult levels.
-- 🧠 **Sanity & Suspicion**: A dynamic risk-reward system that reacts to player behavior.
-- 🏆 **Ranking System**: Tier-based leaderboard based on merit points and performance.
-- 🧙 **Tool Shop**: Buy syringes, timers, and skip-a-day tools with merit points.
-- 🎭 **Alliances, Bounties, and Black Market**: Strategic social deception mechanics.
-- 💬 **Slash Command Based**: Clean and modern interface using Discord's interactions.
-- 🔄 **Replayability**: Unlimited attempts and branching game modes for each session.
+-  **Multiplayer Game System**: Co-op, sabotage, and competitive puzzle-solving modes.
+-  **Puzzle Variety**: Riddles, trivia, memory, math, and logic games.
+-  **Progression System**: Earn merit points to unlock increasingly difficult levels.
+-  **Sanity & Suspicion**: A dynamic risk-reward system that reacts to player behavior.
+-  **Ranking System**: Tier-based leaderboard based on merit points and performance.
+-  **Tool Shop**: Buy syringes, timers, and skip-a-day tools with merit points.
+-  **Alliances, Bounties, and Black Market**: Strategic social deception mechanics.
+-  **Slash Command Based**: Clean and modern interface using Discord's interactions.
+-  **Replayability**: Unlimited attempts and branching game modes for each session.
 
 ---
 
